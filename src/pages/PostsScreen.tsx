@@ -5,9 +5,12 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ArrowLeft, Plus, Image as ImageIcon } from "lucide-react";
+import { ArrowLeft, Plus, Image as ImageIcon, Download, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { AspectRatio, ASPECT_RATIO_CONFIG, TemplateDefinition } from "@/types/template";
+import { AspectRatio, ASPECT_RATIO_CONFIG, TemplateDefinition, CanvasData } from "@/types/template";
+import PostThumbnail from "@/components/PostThumbnail";
+import { exportCanvasToImage, downloadBlob } from "@/lib/exportCanvas";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface Post {
   id: string;
@@ -15,6 +18,7 @@ interface Post {
   template_id: string | null;
   canvas_data: any;
   sort_order: number;
+  templates?: { definition: TemplateDefinition } | null;
 }
 
 interface Template {
@@ -34,6 +38,8 @@ const PostsScreen = () => {
   const [showNewPost, setShowNewPost] = useState(false);
   const [selectedRatio, setSelectedRatio] = useState<AspectRatio>("9:16");
   const [step, setStep] = useState<"ratio" | "template">("ratio");
+  const [loading, setLoading] = useState(true);
+  const [batchExporting, setBatchExporting] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -43,13 +49,14 @@ const PostsScreen = () => {
     const fetchData = async () => {
       const [projectRes, postsRes, templatesRes] = await Promise.all([
         supabase.from("projects").select("title").eq("id", projectId).single(),
-        supabase.from("posts").select("*").eq("project_id", projectId).order("sort_order"),
+        supabase.from("posts").select("*, templates(definition)").eq("project_id", projectId).order("sort_order"),
         supabase.from("templates").select("*"),
       ]);
 
       if (projectRes.data) setProjectTitle(projectRes.data.title);
-      if (postsRes.data) setPosts(postsRes.data);
+      if (postsRes.data) setPosts(postsRes.data as unknown as Post[]);
       if (templatesRes.data) setTemplates(templatesRes.data as unknown as Template[]);
+      setLoading(false);
     };
     fetchData();
   }, [user, projectId]);
@@ -99,6 +106,34 @@ const PostsScreen = () => {
       setStep("ratio");
       navigate(`/project/${projectId}/post/${data.id}`);
     }
+  };
+
+  const deletePost = async (postId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const { error } = await supabase.from("posts").delete().eq("id", postId);
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      setPosts((prev) => prev.filter((p) => p.id !== postId));
+    }
+  };
+
+  const handleBatchExport = async () => {
+    setBatchExporting(true);
+    let exported = 0;
+    for (const post of posts) {
+      const tmpl = post.templates?.definition || templates.find((t) => t.id === post.template_id)?.definition;
+      if (!tmpl) continue;
+      const cd = post.canvas_data as CanvasData;
+      if (!cd?.images) continue;
+      try {
+        const blob = await exportCanvasToImage(cd, tmpl, post.aspect_ratio as AspectRatio);
+        downloadBlob(blob, `post-${exported + 1}.png`);
+        exported++;
+      } catch { /* skip */ }
+    }
+    setBatchExporting(false);
+    toast({ title: `Exported ${exported} post${exported !== 1 ? "s" : ""}` });
   };
 
   const filteredTemplates = templates.filter((t) =>
@@ -155,16 +190,27 @@ const PostsScreen = () => {
           />
         ) : (
           <h1
-            className="text-lg font-semibold font-sans cursor-pointer"
+            className="text-lg font-semibold font-sans cursor-pointer flex-1"
             onClick={() => setEditingTitle(true)}
           >
             {projectTitle}
           </h1>
         )}
+        {posts.length > 0 && (
+          <Button variant="ghost" size="icon" onClick={handleBatchExport} disabled={batchExporting}>
+            <Download className="h-5 w-5" />
+          </Button>
+        )}
       </header>
 
       <main className="mx-auto max-w-lg px-4 py-6">
-        {posts.length === 0 ? (
+        {loading ? (
+          <div className="grid grid-cols-3 gap-3">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="rounded-xl" style={{ aspectRatio: 9 / 16 }} />
+            ))}
+          </div>
+        ) : posts.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="mb-4 rounded-2xl bg-secondary p-5">
               <ImageIcon className="h-10 w-10 text-muted-foreground" />
@@ -178,17 +224,25 @@ const PostsScreen = () => {
         ) : (
           <div className="grid grid-cols-3 gap-3">
             {posts.map((post) => {
-              const ratioValue = ASPECT_RATIO_CONFIG[post.aspect_ratio as AspectRatio]?.ratio ?? 1;
+              const tmpl = post.templates?.definition || null;
+              const cd = post.canvas_data as CanvasData;
               return (
                 <div
                   key={post.id}
-                  className="cursor-pointer rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow bg-card border border-border"
+                  className="relative cursor-pointer rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow bg-card border border-border group"
                   onClick={() => navigate(`/project/${projectId}/post/${post.id}`)}
-                  style={{ aspectRatio: ratioValue }}
                 >
-                  <div className="w-full h-full flex items-center justify-center bg-secondary">
-                    <ImageIcon className="h-6 w-6 text-muted-foreground/40" />
-                  </div>
+                  <PostThumbnail
+                    canvasData={cd?.images ? cd : { images: [], texts: [], background: "#FFFFFF" }}
+                    template={tmpl}
+                    aspectRatio={post.aspect_ratio as AspectRatio}
+                  />
+                  <button
+                    className="absolute top-1 right-1 h-7 w-7 rounded-full bg-background/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={(e) => deletePost(post.id, e)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                  </button>
                 </div>
               );
             })}
