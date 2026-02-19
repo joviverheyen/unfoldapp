@@ -1,84 +1,68 @@
+# Phase 5: Polish, Export, and Thumbnails
 
-# Unfold — Mobile-First Visual Story Creator
+## What's included
 
-## Overview
-A 3-layer content creation app (Projects → Posts → Canvas) for building visual stories and social media posts using pre-designed templates. Cloud-backed with Supabase for persistence and image storage.
+### 1. Image Export (Canvas to downloadable image)
 
----
+- Wire the existing "Export" button to render the canvas as a 1080px-wide image using the HTML Canvas API
+- Draw all image slots, text areas, and background onto an offscreen canvas at export resolution
+- Trigger a browser download of the resulting PNG
+- Support batch export: add an "Export All" option on the Posts screen that downloads all posts in the project as individual images
 
-## Phase 1: Foundation & Data Layer
+### 2. Live Post Thumbnails
 
-### Supabase Setup
-- **Database tables**: `projects`, `posts`, `templates`
-- **Storage bucket**: `post-images` for user-uploaded photos
-- **Authentication**: Email-based sign-up/login so users can access their projects from any device
+- On the Posts screen, replace the generic placeholder icons with a mini rendered preview of each post's actual canvas data (images + background + layout)
+- On the Projects screen, show the first few post thumbnails in each project card instead of gray placeholder boxes
+- Use the stored `canvas_data` and template definition to render these previews
 
-### Template System
-- Ship with ~6 starter templates covering common layouts:
-  - Single image (full bleed)
-  - Two-image vertical split
-  - Two-image horizontal split
-  - Image + text overlay
-  - Text-only with styled background
-  - Three-image collage
-- Templates stored as JSON definitions in the `templates` table (image slot positions, text areas, default styles)
-- Designed so an admin can easily add new templates by inserting rows into the database
+### 3. Canvas Editor Toolbar
 
----
+- Add a bottom toolbar panel to the canvas editor with:
+  - **Background color picker**: a row of preset color swatches plus a custom color input
+  - **Text controls** (shown when a text area is focused): font selection (Northwell & Amiri), font size slider, color picker, alignment toggle (left/center/right)
+  - **Image slot actions** (shown when clicking a filled image slot): Replace and Remove buttons instead of immediately opening the file picker
 
-## Phase 2: Projects Screen (Home)
+### 4. Delete Actions
 
-- List of project cards showing title, date, and small post thumbnails
-- Floating "+" button to create a new project
-- Tap a project card → navigate to its Posts screen
-- Soft, rounded card design with gentle shadows
-- Empty state with friendly illustration/message for first-time users
+- Add swipe-to-delete or a delete button on post thumbnails in the Posts screen
+- Add a delete/archive option on project cards in the Projects screen
 
----
+### 5. UI Polish
 
-## Phase 3: Posts Screen (Project Detail)
-
-- Header with back arrow and project title (editable)
-- Grid of post thumbnails showing current state of each post
-- "+" button to add a new post
-- When adding a post: user selects **aspect ratio** (9:16 Story, 1:1 Square, 4:5 Portrait), then picks a template
-- Template picker: browsable grid of template previews filtered to the selected format
-- Tap existing post thumbnail → opens Canvas editor
+- Add smooth page transition animations between Projects, Posts, and Canvas screens
+- Improve loading states with skeleton placeholders instead of plain "Loading..." text
+- Ensure touch targets are at least 44px on mobile
 
 ---
 
-## Phase 4: Canvas Editor
+## Technical details
 
-### Core editing experience
-- Large canvas preview area showing the post at the correct aspect ratio
-- **Image placeholders**: Tap an empty slot → file picker → image fills that slot
-- **Image editing**: Tap a filled slot to drag/reposition, pinch-to-zoom (scale), or replace/remove the image
-- **Text editing**: Tap template text areas to edit content, change font size, color, and alignment; drag to reposition
-- **Background**: Color picker or preset colors/gradients for the post background
+### Export implementation
 
-### Top bar
-- Back button (returns to Posts screen)
-- Save/Export button
+- Create a utility function `exportCanvasToImage(canvasData, template, aspectRatio)` in `src/lib/exportCanvas.ts`
+- Uses `OffscreenCanvas` or a hidden `<canvas>` element
+- Loads all slot images via `Image()` objects, draws them at their positions with offset/scale transforms
+- Renders text areas with matching font, size, color, alignment
+- Outputs as PNG blob, triggers download via `URL.createObjectURL` + hidden anchor click
+- For batch export, iterates all posts in the project and downloads each
 
-### Save & Export
-- Renders the canvas as a downloadable image at the correct resolution (1080px wide)
-- Option to export current post or batch-export all posts in the project
-- Non-destructive: editable state always preserved
+### Thumbnail rendering
 
----
+- Create a `PostThumbnail` component that takes `canvasData`, `templateDefinition`, and `aspectRatio`
+- Renders a small DOM-based preview (reuses the same layout logic as the canvas but at thumbnail scale)
+- Images are shown via `<img>` tags with `object-cover`; text is rendered but truncated for small sizes
 
-## Phase 5: Polish & Supporting Features
+### Editor toolbar
 
-- **Thumbnail generation**: Posts screen shows live preview thumbnails reflecting latest edits
-- **Re-entry**: Opening an existing post restores all previous edits
-- **Responsive layout**: Mobile-first design that works well on tablet/desktop too
-- **Soft, friendly UI**: Rounded corners, gentle shadows, warm neutral palette, smooth transitions between screens
+- Add state tracking for `activeElement` (which slot or text area is selected)
+- Conditionally render image controls vs text controls based on selection
+- Background color updates `canvasData.background`; text controls update the matching entry in `canvasData.texts`
 
----
+### Files to create/modify
 
-## Design Direction
-- Clean, minimal interface inspired by Unfold's aesthetic
-- Soft whites and light grays with subtle shadows
-- Rounded cards and buttons
-- Smooth page transitions between the 3 levels
-- Mobile-optimized touch targets with desktop compatibility
+- **New**: `src/lib/exportCanvas.ts` (export utility)
+- **New**: `src/components/PostThumbnail.tsx` (reusable thumbnail)
+- **New**: `src/components/EditorToolbar.tsx` (bottom toolbar for canvas)
+- **Modified**: `src/pages/CanvasEditor.tsx` (integrate toolbar, wire export, add slot selection logic)
+- **Modified**: `src/pages/PostsScreen.tsx` (use PostThumbnail, add delete action)
+- **Modified**: `src/pages/Projects.tsx` (fetch post thumbnails, add delete action, skeleton loading)
