@@ -4,8 +4,18 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Plus, LogOut, Layers } from "lucide-react";
+import { Plus, LogOut, Layers, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Skeleton } from "@/components/ui/skeleton";
+import PostThumbnail from "@/components/PostThumbnail";
+import { AspectRatio, TemplateDefinition, CanvasData } from "@/types/template";
+
+interface ProjectPost {
+  id: string;
+  aspect_ratio: string;
+  canvas_data: any;
+  templates: { definition: any } | null;
+}
 
 interface Project {
   id: string;
@@ -17,6 +27,7 @@ interface Project {
 const Projects = () => {
   const { user } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
+  const [projectPosts, setProjectPosts] = useState<Record<string, ProjectPost[]>>({});
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -32,6 +43,24 @@ const Projects = () => {
         toast({ title: "Error", description: error.message, variant: "destructive" });
       } else {
         setProjects(data ?? []);
+        // Fetch first 3 posts per project for thumbnails
+        if (data && data.length > 0) {
+          const { data: posts } = await supabase
+            .from("posts")
+            .select("id, aspect_ratio, canvas_data, project_id, templates(definition)")
+            .in("project_id", data.map((p) => p.id))
+            .order("sort_order")
+            .limit(100);
+          if (posts) {
+            const grouped: Record<string, ProjectPost[]> = {};
+            for (const post of posts as any[]) {
+              const pid = post.project_id;
+              if (!grouped[pid]) grouped[pid] = [];
+              if (grouped[pid].length < 3) grouped[pid].push(post);
+            }
+            setProjectPosts(grouped);
+          }
+        }
       }
       setLoading(false);
     };
@@ -52,6 +81,18 @@ const Projects = () => {
     }
   };
 
+  const deleteProject = async (projectId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    // Delete posts first, then project
+    await supabase.from("posts").delete().eq("project_id", projectId);
+    const { error } = await supabase.from("projects").delete().eq("id", projectId);
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      setProjects((prev) => prev.filter((p) => p.id !== projectId));
+    }
+  };
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     navigate("/auth");
@@ -59,15 +100,21 @@ const Projects = () => {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="animate-pulse text-muted-foreground">Loading...</div>
+      <div className="min-h-screen bg-background">
+        <header className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/80 backdrop-blur-sm px-4 py-3">
+          <h1 className="text-2xl font-bold tracking-tight">Unfold</h1>
+        </header>
+        <main className="mx-auto max-w-lg px-4 py-6 space-y-4">
+          {[1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-20 rounded-2xl" />
+          ))}
+        </main>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/80 backdrop-blur-sm px-4 py-3">
         <h1 className="text-2xl font-bold tracking-tight">Unfold</h1>
         <Button variant="ghost" size="icon" onClick={handleLogout} aria-label="Sign out">
@@ -93,32 +140,48 @@ const Projects = () => {
           projects.map((project) => (
             <Card
               key={project.id}
-              className="cursor-pointer border-0 shadow-md hover:shadow-lg transition-shadow rounded-2xl p-4"
+              className="cursor-pointer border-0 shadow-md hover:shadow-lg transition-shadow rounded-2xl p-4 group relative"
               onClick={() => navigate(`/project/${project.id}`)}
             >
               <div className="flex items-center justify-between">
-                <div>
+                <div className="flex-1 min-w-0">
                   <h3 className="font-semibold font-sans text-base">{project.title}</h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     {new Date(project.updated_at).toLocaleDateString()}
                   </p>
                 </div>
-                <div className="flex gap-1">
-                  {/* Thumbnail placeholders */}
-                  {[1, 2, 3].map((i) => (
-                    <div
-                      key={i}
-                      className="h-10 w-7 rounded-md bg-secondary"
-                    />
-                  ))}
+                <div className="flex gap-1 items-center">
+                  {(projectPosts[project.id] || []).map((post) => {
+                    const cd = post.canvas_data as CanvasData;
+                    const tmpl = post.templates?.definition as TemplateDefinition | null;
+                    return (
+                      <div key={post.id} className="h-10 w-7 rounded-md overflow-hidden">
+                        <PostThumbnail
+                          canvasData={cd?.images ? cd : { images: [], texts: [], background: "#FFFFFF" }}
+                          template={tmpl}
+                          aspectRatio={post.aspect_ratio as AspectRatio}
+                        />
+                      </div>
+                    );
+                  })}
+                  {(!projectPosts[project.id] || projectPosts[project.id].length === 0) &&
+                    [1, 2, 3].map((i) => (
+                      <div key={i} className="h-10 w-7 rounded-md bg-secondary" />
+                    ))
+                  }
                 </div>
               </div>
+              <button
+                className="absolute top-2 right-2 h-7 w-7 rounded-full bg-background/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={(e) => deleteProject(project.id, e)}
+              >
+                <Trash2 className="h-3.5 w-3.5 text-destructive" />
+              </button>
             </Card>
           ))
         )}
       </main>
 
-      {/* FAB */}
       {projects.length > 0 && (
         <Button
           onClick={createProject}
