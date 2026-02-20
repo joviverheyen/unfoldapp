@@ -222,14 +222,16 @@ const PostsScreen = () => {
             </Button>
           </div>
         ) : (
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 gap-3 items-start">
             {posts.map((post) => {
               const tmpl = post.templates?.definition || null;
               const cd = post.canvas_data as CanvasData;
+              const ratioValue = ASPECT_RATIO_CONFIG[post.aspect_ratio as AspectRatio]?.ratio ?? 1;
               return (
                 <div
                   key={post.id}
                   className="relative cursor-pointer rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow bg-card border border-border group"
+                  style={{ aspectRatio: ratioValue }}
                   onClick={() => navigate(`/project/${projectId}/post/${post.id}`)}
                 >
                   <PostThumbnail
