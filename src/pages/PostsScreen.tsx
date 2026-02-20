@@ -131,18 +131,18 @@ const PostsScreen = () => {
         const blob = await exportCanvasToImage(cd, tmpl, post.aspect_ratio as AspectRatio);
         downloadBlob(blob, `post-${exported + 1}.png`);
         exported++;
-      } catch { /* skip */ }
+      } catch {
+        /* skip */
+      }
     }
     setBatchExporting(false);
     toast({ title: `Exported ${exported} post${exported !== 1 ? "s" : ""}` });
   };
 
-  const filteredTemplates = templates.filter((t) =>
-    t.aspect_ratios?.includes(selectedRatio)
-  );
+  const filteredTemplates = templates.filter((t) => t.aspect_ratios?.includes(selectedRatio));
 
   const renderTemplateMini = (def: TemplateDefinition) => (
-    <div className="relative w-full h-full bg-secondary rounded-lg overflow-hidden">
+    <div className="relative w-full h-full rounded-lg overflow-hidden">
       {def.slots.map((slot) => (
         <div
           key={slot.id}
@@ -190,10 +190,7 @@ const PostsScreen = () => {
             className="text-lg font-semibold border-0 bg-transparent p-0 h-auto focus-visible:ring-0"
           />
         ) : (
-          <h1
-            className="text-lg font-semibold font-sans cursor-pointer flex-1"
-            onClick={() => setEditingTitle(true)}
-          >
+          <h1 className="text-lg font-semibold font-sans cursor-pointer flex-1" onClick={() => setEditingTitle(true)}>
             {projectTitle}
           </h1>
         )}
@@ -264,31 +261,35 @@ const PostsScreen = () => {
       )}
 
       {/* New Post Dialog */}
-      <Dialog open={showNewPost} onOpenChange={(open) => { setShowNewPost(open); setStep("ratio"); }}>
+      <Dialog
+        open={showNewPost}
+        onOpenChange={(open) => {
+          setShowNewPost(open);
+          setStep("ratio");
+        }}
+      >
         <DialogContent className="rounded-2xl max-w-sm">
           <DialogHeader>
-            <DialogTitle className="font-sans">
-              {step === "ratio" ? "Choose format" : "Pick a template"}
-            </DialogTitle>
+            <DialogTitle className="font-sans">{step === "ratio" ? "Choose format" : "Pick a template"}</DialogTitle>
           </DialogHeader>
 
           {step === "ratio" ? (
             <div className="grid grid-cols-3 gap-3">
-              {(Object.entries(ASPECT_RATIO_CONFIG) as [AspectRatio, typeof ASPECT_RATIO_CONFIG["9:16"]][]).map(
+              {(Object.entries(ASPECT_RATIO_CONFIG) as [AspectRatio, (typeof ASPECT_RATIO_CONFIG)["9:16"]][]).map(
                 ([key, config]) => (
                   <button
                     key={key}
-                    onClick={() => { setSelectedRatio(key); setStep("template"); }}
+                    onClick={() => {
+                      setSelectedRatio(key);
+                      setStep("template");
+                    }}
                     className="flex flex-col items-center gap-2 rounded-xl border-2 border-border p-3 hover:border-primary transition-colors"
                   >
-                    <div
-                      className="rounded-lg bg-secondary"
-                      style={{ width: 48, height: 48 / config.ratio }}
-                    />
+                    <div className="rounded-lg bg-secondary" style={{ width: 48, height: 48 / config.ratio }} />
                     <span className="text-xs font-medium">{config.label}</span>
                     <span className="text-[10px] text-muted-foreground">{key}</span>
                   </button>
-                )
+                ),
               )}
             </div>
           ) : (
@@ -298,10 +299,12 @@ const PostsScreen = () => {
                 (acc[count] = acc[count] || []).push(t);
                 return acc;
               }, {});
-              const groups = Object.keys(grouped).map(Number).sort((a, b) => a - b);
+              const groups = Object.keys(grouped)
+                .map(Number)
+                .sort((a, b) => a - b);
               const defaultTab = groups[0]?.toString() ?? "0";
               const ratioValue = ASPECT_RATIO_CONFIG[selectedRatio]?.ratio ?? 1;
-              const tabLabel = (n: number) => n === 0 ? "Text" : `${n} image${n > 1 ? "s" : ""}`;
+              const tabLabel = (n: number) => (n === 0 ? "Text" : `${n} image${n > 1 ? "s" : ""}`);
 
               return (
                 <Tabs defaultValue={defaultTab} className="w-full">
