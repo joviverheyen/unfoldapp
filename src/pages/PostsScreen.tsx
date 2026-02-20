@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { ArrowLeft, Plus, Image as ImageIcon, Download, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { AspectRatio, ASPECT_RATIO_CONFIG, TemplateDefinition, CanvasData } from "@/types/template";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import PostThumbnail from "@/components/PostThumbnail";
 import { exportCanvasToImage, downloadBlob } from "@/lib/exportCanvas";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -291,26 +292,50 @@ const PostsScreen = () => {
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-3">
-              {filteredTemplates.map((template) => {
-                const ratioValue = ASPECT_RATIO_CONFIG[selectedRatio]?.ratio ?? 1;
-                return (
-                  <button
-                    key={template.id}
-                    onClick={() => createPost(template.id)}
-                    className="flex flex-col items-center gap-2"
-                  >
-                    <div
-                      className="w-full rounded-xl border-2 border-border hover:border-primary transition-colors overflow-hidden"
-                      style={{ aspectRatio: ratioValue }}
-                    >
-                      {renderTemplateMini(template.definition)}
-                    </div>
-                    <span className="text-xs text-muted-foreground">{template.name}</span>
-                  </button>
-                );
-              })}
-            </div>
+            (() => {
+              const grouped = filteredTemplates.reduce<Record<number, Template[]>>((acc, t) => {
+                const count = (t.definition as TemplateDefinition).slots?.length ?? 0;
+                (acc[count] = acc[count] || []).push(t);
+                return acc;
+              }, {});
+              const groups = Object.keys(grouped).map(Number).sort((a, b) => a - b);
+              const defaultTab = groups[0]?.toString() ?? "0";
+              const ratioValue = ASPECT_RATIO_CONFIG[selectedRatio]?.ratio ?? 1;
+              const tabLabel = (n: number) => n === 0 ? "Text" : `${n} image${n > 1 ? "s" : ""}`;
+
+              return (
+                <Tabs defaultValue={defaultTab} className="w-full">
+                  <TabsList className="w-full mb-3">
+                    {groups.map((g) => (
+                      <TabsTrigger key={g} value={g.toString()} className="flex-1 text-xs">
+                        {tabLabel(g)}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                  {groups.map((g) => (
+                    <TabsContent key={g} value={g.toString()}>
+                      <div className="grid grid-cols-3 gap-3">
+                        {grouped[g].map((template) => (
+                          <button
+                            key={template.id}
+                            onClick={() => createPost(template.id)}
+                            className="flex flex-col items-center gap-2"
+                          >
+                            <div
+                              className="w-full rounded-xl border-2 border-border hover:border-primary transition-colors overflow-hidden"
+                              style={{ aspectRatio: ratioValue }}
+                            >
+                              {renderTemplateMini(template.definition)}
+                            </div>
+                            <span className="text-xs text-muted-foreground">{template.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </TabsContent>
+                  ))}
+                </Tabs>
+              );
+            })()
           )}
         </DialogContent>
       </Dialog>
