@@ -82,8 +82,10 @@ export async function exportCanvasToImage(
     const tw = (ta.width / 100) * width;
 
     const fontSize = ((textData?.fontSize ?? ta.fontSize) * width) / 360;
-    const fontFamily = "'DM Sans', sans-serif";
-    ctx.font = `${fontSize}px ${fontFamily}`;
+    const fontFamily = textData?.fontFamily ?? "'DM Sans', sans-serif";
+    const bold = textData?.bold ? "bold " : "";
+    const italic = textData?.italic ? "italic " : "";
+    ctx.font = `${italic}${bold}${fontSize}px ${fontFamily}`;
     ctx.fillStyle = textData?.color ?? ta.color;
     ctx.textAlign = (textData?.align ?? ta.align) as CanvasTextAlign;
     ctx.textBaseline = "top";
@@ -96,8 +98,17 @@ export async function exportCanvasToImage(
           : tx;
 
     const lines = content.split("\n");
+    const isUnderline = textData?.underline ?? false;
     lines.forEach((line, i) => {
-      ctx.fillText(line, alignX, ty + i * fontSize * 1.3);
+      const lineY = ty + i * fontSize * 1.3;
+      ctx.fillText(line, alignX, lineY);
+      if (isUnderline) {
+        const metrics = ctx.measureText(line);
+        let lineStartX = alignX;
+        if (ctx.textAlign === "center") lineStartX = alignX - metrics.width / 2;
+        else if (ctx.textAlign === "right") lineStartX = alignX - metrics.width;
+        ctx.fillRect(lineStartX, lineY + fontSize * 1.05, metrics.width, Math.max(1, fontSize * 0.05));
+      }
     });
   }
 

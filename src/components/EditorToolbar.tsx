@@ -1,7 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { Input } from "@/components/ui/input";
-import { AlignLeft, AlignCenter, AlignRight, Replace, Trash2, Palette } from "lucide-react";
+import { AlignLeft, AlignCenter, AlignRight, Replace, Trash2, Palette, Bold, Italic, Underline } from "lucide-react";
 import { CanvasData } from "@/types/template";
 
 const PRESET_COLORS = [
@@ -10,11 +9,33 @@ const PRESET_COLORS = [
   "#D4A373", "#E76F51", "#264653", "#2A9D8F",
 ];
 
+const TEXT_COLORS = ["#000000", "#FFFFFF", "#4A3728", "#E76F51", "#264653", "#2A9D8F"];
+
+const FONTS = [
+  { name: "Montserrat", family: "'Montserrat', sans-serif" },
+  { name: "Amiri", family: "'Amiri', serif" },
+  { name: "Playfair", family: "'Playfair Display', serif" },
+  { name: "Northwell", family: "'Dancing Script', cursive" },
+  { name: "Bebas", family: "'Bebas Neue', sans-serif" },
+  { name: "Rustico", family: "'Permanent Marker', cursive" },
+  { name: "Canela", family: "'Cormorant Garamond', serif" },
+  { name: "Cinzel", family: "'Cinzel', serif" },
+  { name: "Forum", family: "'Forum', serif" },
+];
+
 interface EditorToolbarProps {
   canvasData: CanvasData;
   activeElement: { type: "text"; id: string } | { type: "image"; id: string } | null;
   onBackgroundChange: (color: string) => void;
-  onTextUpdate: (textAreaId: string, updates: Partial<{ fontSize: number; color: string; align: "left" | "center" | "right" }>) => void;
+  onTextUpdate: (textAreaId: string, updates: Partial<{
+    fontSize: number;
+    color: string;
+    align: "left" | "center" | "right";
+    fontFamily: string;
+    bold: boolean;
+    italic: boolean;
+    underline: boolean;
+  }>) => void;
   onImageReplace: (slotId: string) => void;
   onImageRemove: (slotId: string) => void;
 }
@@ -40,8 +61,8 @@ const EditorToolbar = ({
       {/* Text controls */}
       {activeText && (
         <div className="space-y-3">
+          {/* Font size slider */}
           <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground w-10">Size</span>
             <Slider
               value={[activeText.fontSize]}
               min={8}
@@ -52,10 +73,11 @@ const EditorToolbar = ({
             />
             <span className="text-xs text-muted-foreground w-6 text-right">{activeText.fontSize}</span>
           </div>
+
+          {/* Color + Align + B/I/U row */}
           <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground w-10">Color</span>
-            <div className="flex gap-1.5 flex-wrap flex-1">
-              {["#000000", "#FFFFFF", "#4A3728", "#E76F51", "#264653", "#2A9D8F"].map((c) => (
+            <div className="flex gap-1.5 flex-1 flex-wrap">
+              {TEXT_COLORS.map((c) => (
                 <button
                   key={c}
                   className={`h-7 w-7 rounded-full border-2 transition-all ${activeText.color === c ? "border-primary scale-110" : "border-border"}`}
@@ -73,9 +95,7 @@ const EditorToolbar = ({
                 />
               </label>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground w-10">Align</span>
+
             <div className="flex gap-1">
               {([["left", AlignLeft], ["center", AlignCenter], ["right", AlignRight]] as const).map(
                 ([align, Icon]) => (
@@ -91,6 +111,54 @@ const EditorToolbar = ({
                 ),
               )}
             </div>
+
+            <div className="flex gap-1">
+              <Button
+                variant={activeText.bold ? "default" : "outline"}
+                size="sm"
+                className="h-8 w-8 p-0 font-bold"
+                onClick={() => onTextUpdate(activeText.textAreaId, { bold: !activeText.bold })}
+              >
+                <Bold className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={activeText.italic ? "default" : "outline"}
+                size="sm"
+                className="h-8 w-8 p-0"
+                onClick={() => onTextUpdate(activeText.textAreaId, { italic: !activeText.italic })}
+              >
+                <Italic className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={activeText.underline ? "default" : "outline"}
+                size="sm"
+                className="h-8 w-8 p-0"
+                onClick={() => onTextUpdate(activeText.textAreaId, { underline: !activeText.underline })}
+              >
+                <Underline className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Font picker grid */}
+          <div className="grid grid-cols-3 gap-1.5">
+            {FONTS.map((font) => {
+              const isSelected = activeText.fontFamily === font.family;
+              return (
+                <button
+                  key={font.name}
+                  className={`px-3 py-2 rounded-lg text-sm transition-all ${
+                    isSelected
+                      ? "bg-foreground text-background"
+                      : "bg-secondary text-foreground hover:bg-accent"
+                  }`}
+                  style={{ fontFamily: font.family }}
+                  onClick={() => onTextUpdate(activeText.textAreaId, { fontFamily: font.family })}
+                >
+                  {font.name}
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -107,29 +175,30 @@ const EditorToolbar = ({
         </div>
       )}
 
-      {/* Background color (always shown) */}
-      <div className="space-y-1.5">
-        <span className="text-xs text-muted-foreground">Background</span>
-        <div className="flex gap-1.5 flex-wrap">
-          {PRESET_COLORS.map((c) => (
-            <button
-              key={c}
-              className={`h-7 w-7 rounded-full border-2 transition-all ${canvasData.background === c ? "border-primary scale-110" : "border-border"}`}
-              style={{ backgroundColor: c }}
-              onClick={() => onBackgroundChange(c)}
-            />
-          ))}
-          <label className="h-7 w-7 rounded-full border-2 border-border overflow-hidden cursor-pointer relative">
-            <Palette className="h-3 w-3 absolute inset-0 m-auto text-muted-foreground" />
-            <input
-              type="color"
-              value={canvasData.background}
-              onChange={(e) => onBackgroundChange(e.target.value)}
-              className="absolute inset-0 opacity-0 cursor-pointer"
-            />
-          </label>
+      {/* Background color — only when nothing selected */}
+      {!activeElement && (
+        <div className="space-y-1.5">
+          <div className="flex gap-1.5 flex-wrap">
+            {PRESET_COLORS.map((c) => (
+              <button
+                key={c}
+                className={`h-7 w-7 rounded-full border-2 transition-all ${canvasData.background === c ? "border-primary scale-110" : "border-border"}`}
+                style={{ backgroundColor: c }}
+                onClick={() => onBackgroundChange(c)}
+              />
+            ))}
+            <label className="h-7 w-7 rounded-full border-2 border-border overflow-hidden cursor-pointer relative">
+              <Palette className="h-3 w-3 absolute inset-0 m-auto text-muted-foreground" />
+              <input
+                type="color"
+                value={canvasData.background}
+                onChange={(e) => onBackgroundChange(e.target.value)}
+                className="absolute inset-0 opacity-0 cursor-pointer"
+              />
+            </label>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

@@ -47,6 +47,10 @@ export interface CanvasTextData {
   fontSize: number;
   color: string;
   align: "left" | "center" | "right";
+  fontFamily: string;
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
   x: number;
   y: number;
 }

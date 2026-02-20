@@ -58,6 +58,10 @@ const CanvasEditor = () => {
             fontSize: ta.fontSize,
             color: ta.color,
             align: ta.align as "left" | "center" | "right",
+            fontFamily: "'DM Sans', sans-serif",
+            bold: false,
+            italic: false,
+            underline: false,
             x: ta.x,
             y: ta.y,
           })),
@@ -138,7 +142,10 @@ const CanvasEditor = () => {
     }));
   };
 
-  const handleTextUpdate = (textAreaId: string, updates: Partial<{ fontSize: number; color: string; align: "left" | "center" | "right" }>) => {
+  const handleTextUpdate = (textAreaId: string, updates: Partial<{
+    fontSize: number; color: string; align: "left" | "center" | "right";
+    fontFamily: string; bold: boolean; italic: boolean; underline: boolean;
+  }>) => {
     setCanvasData((prev) => ({
       ...prev,
       texts: prev.texts.map((t) => (t.textAreaId === textAreaId ? { ...t, ...updates } : t)),
@@ -260,7 +267,10 @@ const CanvasEditor = () => {
                     fontSize: textData?.fontSize ?? ta.fontSize,
                     color: textData?.color ?? ta.color,
                     textAlign: (textData?.align ?? ta.align) as any,
-                    fontFamily: "'DM Sans', sans-serif",
+                    fontFamily: textData?.fontFamily ?? "'DM Sans', sans-serif",
+                    fontWeight: textData?.bold ? "bold" : "normal",
+                    fontStyle: textData?.italic ? "italic" : "normal",
+                    textDecoration: textData?.underline ? "underline" : "none",
                   }}
                   value={textData?.content ?? ta.defaultText}
                   onChange={(e) => updateText(ta.id, e.target.value)}
