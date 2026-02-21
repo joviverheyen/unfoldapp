@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { AlignLeft, AlignCenter, AlignRight, Replace, Trash2, Palette, Bold, Italic, Underline } from "lucide-react";
-import { CanvasData } from "@/types/template";
+import { AlignLeft, AlignCenter, AlignRight, Replace, Trash2, Palette, Bold, Italic, Underline, ZoomIn } from "lucide-react";
+import { CanvasData, CanvasImageData } from "@/types/template";
 
 const PRESET_COLORS = [
 "#FFFFFF", "#F5F0EB", "#FFF8E7", "#E8D5C4",
@@ -38,6 +38,7 @@ interface EditorToolbarProps {
   }>) => void;
   onImageReplace: (slotId: string) => void;
   onImageRemove: (slotId: string) => void;
+  onImageUpdate: (slotId: string, updates: Partial<CanvasImageData>) => void;
 }
 
 const EditorToolbar = ({
@@ -46,7 +47,8 @@ const EditorToolbar = ({
   onBackgroundChange,
   onTextUpdate,
   onImageReplace,
-  onImageRemove
+  onImageRemove,
+  onImageUpdate
 }: EditorToolbarProps) => {
   const activeText = activeElement?.type === "text" ?
   canvasData.texts.find((t) => t.textAreaId === activeElement.id) :
@@ -165,13 +167,27 @@ const EditorToolbar = ({
 
       {/* Image slot controls */}
       {activeImage && activeElement?.type === "image" &&
-      <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="flex-1 gap-1.5" onClick={() => onImageReplace(activeElement.id)}>
-            <Replace className="h-4 w-4" /> Replace
-          </Button>
-          <Button variant="outline" size="sm" className="flex-1 gap-1.5 text-destructive" onClick={() => onImageRemove(activeElement.id)}>
-            <Trash2 className="h-4 w-4" /> Remove
-          </Button>
+      <div className="space-y-3">
+          {/* Zoom slider */}
+          <div className="flex items-center gap-2">
+            <ZoomIn className="h-4 w-4 text-muted-foreground" />
+            <Slider
+              value={[activeImage.scale]}
+              min={0.5}
+              max={3}
+              step={0.05}
+              onValueChange={([v]) => onImageUpdate(activeElement.id, { scale: v })}
+              className="flex-1" />
+            <span className="text-xs text-muted-foreground w-8 text-right">{activeImage.scale.toFixed(1)}x</span>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" className="flex-1 gap-1.5" onClick={() => onImageReplace(activeElement.id)}>
+              <Replace className="h-4 w-4" /> Replace
+            </Button>
+            <Button variant="outline" size="sm" className="flex-1 gap-1.5 text-destructive" onClick={() => onImageRemove(activeElement.id)}>
+              <Trash2 className="h-4 w-4" /> Remove
+            </Button>
+          </div>
         </div>
       }
 
