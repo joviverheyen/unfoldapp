@@ -31,6 +31,12 @@ const CanvasEditor = () => {
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
 
+  // Drag-to-pan refs
+  const isDragging = useRef(false);
+  const dragStart = useRef({ x: 0, y: 0 });
+  const dragSlotId = useRef<string | null>(null);
+  const dragStartOffset = useRef({ x: 0, y: 0 });
+
   useEffect(() => {
     if (!user || !postId) return;
     const fetchPost = async () => {
@@ -164,6 +170,41 @@ const CanvasEditor = () => {
     triggerFileInput(slotId);
   };
 
+  const handleImageUpdate = (slotId: string, updates: Partial<CanvasImageData>) => {
+    setCanvasData((prev) => ({
+      ...prev,
+      images: prev.images.map((img) =>
+        img.slotId === slotId ? { ...img, ...updates } : img
+      ),
+    }));
+  };
+
+  const handlePointerDown = (e: React.PointerEvent, slotId: string) => {
+    const imgData = canvasData.images.find((img) => img.slotId === slotId);
+    if (!imgData) return;
+    isDragging.current = true;
+    dragSlotId.current = slotId;
+    dragStart.current = { x: e.clientX, y: e.clientY };
+    dragStartOffset.current = { x: imgData.offsetX, y: imgData.offsetY };
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    e.preventDefault();
+  };
+
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!isDragging.current || !dragSlotId.current) return;
+    const dx = e.clientX - dragStart.current.x;
+    const dy = e.clientY - dragStart.current.y;
+    handleImageUpdate(dragSlotId.current, {
+      offsetX: dragStartOffset.current.x + dx,
+      offsetY: dragStartOffset.current.y + dy,
+    });
+  };
+
+  const handlePointerUp = () => {
+    isDragging.current = false;
+    dragSlotId.current = null;
+  };
+
   const handleBackgroundChange = (color: string) => {
     setCanvasData((prev) => ({ ...prev, background: color }));
   };
@@ -225,14 +266,18 @@ const CanvasEditor = () => {
                   top: `${slot.y}%`,
                   width: `${slot.width}%`,
                   height: `${slot.height}%`,
+                  touchAction: imgData && isActive ? "none" : undefined,
                 }}
                 onClick={(e) => { e.stopPropagation(); handleSlotClick(slot.id); }}
+                onPointerDown={imgData && isActive ? (e) => { e.stopPropagation(); handlePointerDown(e, slot.id); } : undefined}
+                onPointerMove={imgData && isActive ? handlePointerMove : undefined}
+                onPointerUp={imgData && isActive ? handlePointerUp : undefined}
               >
                 {imgData ? (
                   <img
                     src={imgData.imageUrl}
                     alt=""
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover pointer-events-none"
                     style={{
                       transform: `translate(${imgData.offsetX}px, ${imgData.offsetY}px) scale(${imgData.scale})`,
                     }}
@@ -291,6 +336,7 @@ const CanvasEditor = () => {
         onTextUpdate={handleTextUpdate}
         onImageReplace={handleImageReplace}
         onImageRemove={handleImageRemove}
+        onImageUpdate={handleImageUpdate}
       />
 
       <input
