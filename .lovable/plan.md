@@ -1,53 +1,49 @@
 
 
-# Editor Toolbar Redesign: Dynamic Panels, Font Selection, and Text Formatting
+# Image Zoom and Pan Inside Slots
+
+## What it does
+When an image is placed inside a slot, users will be able to:
+- **Zoom**: Use a slider in the toolbar to scale the image (0.5x to 3x) within its frame
+- **Pan/Move**: Drag the image with touch or mouse to reposition it inside the frame
+
+The data model already supports this -- `CanvasImageData` has `offsetX`, `offsetY`, and `scale` fields, and the export logic in `exportCanvas.ts` already renders them. We just need to wire up the UI controls.
+
+---
 
 ## Changes
 
-### 1. Dynamic toolbar content based on selection
-- **Nothing selected** → show background color swatches only
-- **Text selected** → show text controls only (font, size, color, alignment, bold/italic/underline)
-- **Image selected** → show Replace and Remove buttons only
-- Remove the "always visible" background section — it only appears when nothing is selected
+### 1. Drag-to-pan on image slots (CanvasEditor.tsx)
+- Add `onPointerDown` / `onPointerMove` / `onPointerUp` handlers to image slot `<div>`s (only when the slot is active and has an image)
+- Track drag start position, compute delta, and update `imgData.offsetX` / `offsetY` in `canvasData`
+- Use `pointer-events` and `touch-action: none` so it works on both desktop and mobile
 
-### 2. Font selection
-Add a font picker grid (3 columns, matching the reference screenshot) with these 9 fonts:
-- Montserrat, Amiri, Playfair Display, Northwell, Bebas Neue, Rustico, Canela, Cinzel, Forum
-- Each font button label is rendered in its own font for a live preview
-- Selected font gets a highlighted state (white background, dark text — like the screenshot)
-- Fonts loaded via Google Fonts (for those available) or `@font-face` declarations
+### 2. Zoom slider in the toolbar (EditorToolbar.tsx)
+- When an image slot is selected, show a zoom `<Slider>` (range 0.5 to 3, step 0.05, default 1) alongside the existing Replace/Remove buttons
+- Add a new `onImageUpdate` callback prop to pass scale changes back to the parent
 
-### 3. Remove labels
-Remove the "Size", "Color", "Align", "Background" text labels in front of each control row
-
-### 4. Bold, Italic, Underline controls
-Add B/I/U toggle buttons to the text toolbar section. These are toggleable per text area.
-
-### 5. Data model updates
-Extend `CanvasTextData` in `src/types/template.ts` with:
-- `fontFamily: string` (default: "DM Sans")
-- `bold: boolean` (default: false)
-- `italic: boolean` (default: false)
-- `underline: boolean` (default: false)
+### 3. Wire it together (CanvasEditor.tsx)
+- Add a `handleImageUpdate(slotId, updates)` function that merges partial updates (`scale`, `offsetX`, `offsetY`) into the matching `CanvasImageData`
+- Pass it to `EditorToolbar` as `onImageUpdate`
 
 ---
 
 ## Technical details
 
 ### Files to modify
-- **`src/types/template.ts`** — add `fontFamily`, `bold`, `italic`, `underline` to `CanvasTextData`
-- **`src/components/EditorToolbar.tsx`** — complete rewrite of toolbar: conditional rendering by selection type, font picker grid, B/I/U toggles, remove labels
-- **`src/pages/CanvasEditor.tsx`** — update `onTextUpdate` type to include new properties; apply `fontFamily`, `fontWeight`, `fontStyle`, `textDecoration` to text areas on canvas; update default text initialization to include new fields
-- **`src/lib/exportCanvas.ts`** — update export to use selected font, bold/italic/underline in `ctx.font` and `ctx.textDecoration` rendering
-- **`src/index.css`** — add `@import` or `@font-face` rules for all 9 fonts (Google Fonts where available)
 
-### Font loading strategy
-- Google Fonts CDN for: Montserrat, Amiri, Playfair Display, Bebas Neue, Cinzel, Forum
-- For Northwell, Rustico, Canela — these are commercial/custom fonts. We'll use close Google Fonts alternatives or add placeholder `@font-face` declarations that can be swapped for real font files later:
-  - Northwell → use a script font like "Dancing Script" as stand-in (or load if user provides files)
-  - Rustico → use "Permanent Marker" as stand-in
-  - Canela → use "Cormorant Garamond" as stand-in
+**`src/pages/CanvasEditor.tsx`**
+- New `handleImageUpdate(slotId, updates: Partial<CanvasImageData>)` function
+- Add drag state refs: `isDragging`, `dragStart { x, y }`, `dragSlotId`
+- Attach `onPointerDown`, `onPointerMove`, `onPointerUp` to each image slot div
+- On drag: compute delta from start, update `offsetX`/`offsetY` via `handleImageUpdate`
+- Pass `onImageUpdate` prop to `EditorToolbar`
 
-### Toolbar layout
-When text is selected, the toolbar shows a compact set of icon-based controls in a horizontal row (size slider, color swatches, alignment buttons, B/I/U toggles) plus a scrollable font picker grid below — similar to the reference screenshot's two-tier layout.
+**`src/components/EditorToolbar.tsx`**
+- Add `onImageUpdate` to props interface
+- In the image-selected section, add a `<Slider>` for zoom (value = `activeImage.scale`, range 0.5-3)
+- On slider change, call `onImageUpdate(slotId, { scale: value })`
+- Layout: zoom slider above the Replace/Remove buttons
 
+### No data model changes needed
+`CanvasImageData` already has `offsetX`, `offsetY`, `scale` and the export logic already uses them.
