@@ -1,49 +1,61 @@
 
 
-# Image Zoom and Pan Inside Slots
+# Add Progressive Web App (PWA) Support
 
-## What it does
-When an image is placed inside a slot, users will be able to:
-- **Zoom**: Use a slider in the toolbar to scale the image (0.5x to 3x) within its frame
-- **Pan/Move**: Drag the image with touch or mouse to reposition it inside the frame
-
-The data model already supports this -- `CanvasImageData` has `offsetX`, `offsetY`, and `scale` fields, and the export logic in `exportCanvas.ts` already renders them. We just need to wire up the UI controls.
-
----
+The app currently has none of the required PWA infrastructure. Here's what needs to be added so it installs and runs correctly from the iOS home screen.
 
 ## Changes
 
-### 1. Drag-to-pan on image slots (CanvasEditor.tsx)
-- Add `onPointerDown` / `onPointerMove` / `onPointerUp` handlers to image slot `<div>`s (only when the slot is active and has an image)
-- Track drag start position, compute delta, and update `imgData.offsetX` / `offsetY` in `canvasData`
-- Use `pointer-events` and `touch-action: none` so it works on both desktop and mobile
+### 1. Install vite-plugin-pwa
+Add `vite-plugin-pwa` as a dependency. This handles manifest generation and service worker setup automatically.
 
-### 2. Zoom slider in the toolbar (EditorToolbar.tsx)
-- When an image slot is selected, show a zoom `<Slider>` (range 0.5 to 3, step 0.05, default 1) alongside the existing Replace/Remove buttons
-- Add a new `onImageUpdate` callback prop to pass scale changes back to the parent
+### 2. Configure PWA in vite.config.ts
+- Register `VitePWA()` plugin with:
+  - App name: "Unfold"
+  - Theme color and background color matching the app palette
+  - A web app manifest with icons (192x192 and 512x512)
+  - `display: "standalone"` for a native-like experience
+  - Service worker with `navigateFallbackDenylist: [/^\/~oauth/]` so auth redirects always hit the network
+  - `registerType: 'autoUpdate'` for seamless updates
 
-### 3. Wire it together (CanvasEditor.tsx)
-- Add a `handleImageUpdate(slotId, updates)` function that merges partial updates (`scale`, `offsetX`, `offsetY`) into the matching `CanvasImageData`
-- Pass it to `EditorToolbar` as `onImageUpdate`
+### 3. Add mobile meta tags to index.html
+- `<meta name="apple-mobile-web-app-capable" content="yes">`
+- `<meta name="apple-mobile-web-app-status-bar-style" content="default">`
+- `<meta name="apple-mobile-web-app-title" content="Unfold">`
+- `<link rel="apple-touch-icon" href="/icons/apple-touch-icon-180x180.png">`
+- `<meta name="theme-color" content="...">`
+- Update `<title>` from "Lovable App" to "Unfold"
+
+### 4. Create PWA icons
+- Generate placeholder icons at `public/icons/`:
+  - `icon-192x192.png`
+  - `icon-512x512.png`
+  - `apple-touch-icon-180x180.png`
+- These can be replaced later with your final brand icons. For now, simple solid-color icons with an "U" will be generated as SVG-based PNGs.
+
+### 5. Register the service worker in the app
+- Import `registerSW` from `virtual:pwa-register` in `src/main.tsx`
+- Call `registerSW({ immediate: true })` so the app caches assets for offline use
 
 ---
 
 ## Technical details
 
+### Files to create
+- `public/icons/icon-192x192.png` -- placeholder PWA icon
+- `public/icons/icon-512x512.png` -- placeholder PWA icon
+- `public/icons/apple-touch-icon-180x180.png` -- Apple touch icon
+
 ### Files to modify
+- **`vite.config.ts`** -- add `VitePWA` plugin with manifest config and service worker settings
+- **`index.html`** -- add Apple mobile web app meta tags, theme-color, apple-touch-icon link, update title
+- **`src/main.tsx`** -- register the service worker
 
-**`src/pages/CanvasEditor.tsx`**
-- New `handleImageUpdate(slotId, updates: Partial<CanvasImageData>)` function
-- Add drag state refs: `isDragging`, `dragStart { x, y }`, `dragSlotId`
-- Attach `onPointerDown`, `onPointerMove`, `onPointerUp` to each image slot div
-- On drag: compute delta from start, update `offsetX`/`offsetY` via `handleImageUpdate`
-- Pass `onImageUpdate` prop to `EditorToolbar`
+### Why this fixes the iOS home screen issue
+iOS Safari requires:
+1. A valid web app manifest (provided by vite-plugin-pwa)
+2. `apple-mobile-web-app-capable` meta tag to run in standalone mode
+3. An `apple-touch-icon` for the home screen icon
+4. A service worker to handle offline caching and navigation fallback
 
-**`src/components/EditorToolbar.tsx`**
-- Add `onImageUpdate` to props interface
-- In the image-selected section, add a `<Slider>` for zoom (value = `activeImage.scale`, range 0.5-3)
-- On slider change, call `onImageUpdate(slotId, { scale: value })`
-- Layout: zoom slider above the Replace/Remove buttons
-
-### No data model changes needed
-`CanvasImageData` already has `offsetX`, `offsetY`, `scale` and the export logic already uses them.
+Without these, iOS treats the bookmark as a regular Safari tab that may not load correctly or show a blank screen.
