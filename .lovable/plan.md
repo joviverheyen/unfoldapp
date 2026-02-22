@@ -1,62 +1,94 @@
 
 
-# Fix Image Zoom/Pan and Add Double-Tap Reset
+# Rewrite Image Display, Zoom, and Pan
 
-## Problem
-When zooming out, the image doesn't reveal more of itself because `object-cover` forces the image to always fill the slot. The transform (translate + scale) operates on an already-cropped image, so zooming out just shows the cropped portion smaller with empty space never filling in with the rest of the picture.
+## The core problem
 
-## Solution
+The current approach wraps the image in a div that is `w-full h-full` (100% of the slot), with the `<img>` using `object-cover`. When the wrapper scales down, the image **still** uses `object-cover` relative to the wrapper, so the browser just crops the same portion smaller -- it never reveals more of the original picture.
 
-### 1. Fix image rendering in slots (CanvasEditor.tsx)
+`object-cover` is the enemy here. It tells the browser to crop the image to fill its container, which is exactly what we do NOT want when zooming out.
 
-Change the `<img>` element inside image slots:
-- Remove `object-cover` -- this CSS property crops the image to fill the container, which defeats zooming out
-- Remove `w-full h-full` -- these constrain the image dimensions to the slot
-- Instead, use `absolute` positioning with a large size (e.g., `min-w-full min-h-full`) and let the transform handle framing
-- Add `transform-origin: center center` so zoom scales from the middle of the slot
-- Keep `overflow-hidden` on the container so the image is clipped to the slot boundary
+## The fix: render the image at its natural "cover" size, no `object-fit`
 
-The key change: the image should be rendered at its natural aspect ratio, centered in the slot, with scale=1 meaning "cover the slot" and scale < 1 revealing more of the image.
+Instead of relying on CSS `object-cover`, we will:
 
-### 2. Add double-tap to reset (CanvasEditor.tsx)
+1. **Track each image's natural dimensions** via an `onLoad` handler, storing `{ naturalWidth, naturalHeight }` per slot in a ref/state map.
+2. **Compute the "cover" size manually**: given the slot's pixel dimensions and the image's aspect ratio, calculate the width and height needed so the image just covers the slot (same math as `object-cover`, but we control it).
+3. **Render the `<img>` at that computed size** with NO `object-fit`, positioned absolutely and centered in the slot.
+4. **Apply the user's `scale` and `offset` as a CSS transform** on the image itself.
 
-- Track last tap time with a ref (`lastTapTime`)
-- On `onPointerDown`, check if the time since last tap is < 300ms
-- If so, reset the image's `offsetX`, `offsetY` to 0 and `scale` to 1
-- This provides a quick way to reset framing without needing the toolbar
+This means:
+- At **scale = 1**, the image covers the slot exactly (same as before).
+- At **scale < 1**, the image physically shrinks below the slot size, revealing its edges -- the full picture becomes visible.
+- At **scale > 1**, the image grows beyond the slot and is clipped by `overflow: hidden`.
+- **Panning** shifts the image within the clipped area.
+
+## Changes
+
+### 1. CanvasEditor.tsx -- image rendering rewrite
+
+**Add natural dimensions tracking:**
+- Add a state: `imageDimensions: Record<string, { w: number; h: number }>`
+- On each `<img>` element, add an `onLoad` handler that reads `e.target.naturalWidth` / `naturalHeight` and stores them keyed by `slotId`
+
+**Replace the image wrapper + img markup:**
+- Remove the wrapper `<div>` with transform
+- Render the `<img>` directly, absolutely positioned
+- Use the slot's rendered pixel size (from a ref on the slot div) and the natural dimensions to compute cover-fit width/height
+- Apply `transform: translate(offsetX, offsetY) scale(userScale)` and `transformOrigin: center` directly on the `<img>`
+- Set `left: 50%; top: 50%; transform: translate(-50%, -50%) translate(offsetX, offsetY) scale(scale)` to center it
+
+**Concrete style for the `<img>`:**
+```
+position: absolute
+left: 50%
+top: 50%
+transform: translate(-50%, -50%) translate(offsetXpx, offsetYpx) scale(s)
+transformOrigin: center center
+width: computed cover width
+height: computed cover height
+pointer-events: none
+(no object-fit at all)
+```
+
+The cover size computation:
+```
+imgRatio = naturalWidth / naturalHeight
+slotRatio = slotPixelWidth / slotPixelHeight
+if imgRatio > slotRatio:
+  coverHeight = slotPixelHeight
+  coverWidth = coverHeight * imgRatio
+else:
+  coverWidth = slotPixelWidth
+  coverHeight = coverWidth / imgRatio
+```
+
+Before natural dimensions are known (image still loading), fall back to `width: 100%; height: 100%; object-fit: cover` as a placeholder.
+
+### 2. PostThumbnail.tsx -- match the same approach
+
+Update the thumbnail renderer to use the same rendering logic so thumbnails accurately reflect the editor view. Since thumbnails are small and non-interactive, a simpler version is fine: just remove `object-cover` and apply the same computed sizing.
+
+### 3. exportCanvas.ts -- no changes needed
+
+The export function already does manual cover-size computation (lines 54-63) and draws with `drawImage`, so it already handles this correctly and will stay in sync.
+
+### 4. Double-tap reset -- already implemented
+
+The double-tap detection in `handlePointerDown` is already in place and resets `offsetX`, `offsetY`, and `scale` to their defaults.
 
 ## Technical details
 
-### CanvasEditor.tsx changes
-
-**Image element styling** (around line 270):
-- Change from: `className="w-full h-full object-cover pointer-events-none"`
-- Change to: `className="absolute top-1/2 left-1/2 pointer-events-none"` with inline style `transform: translate(-50%, -50%) translate(offsetX, offsetY) scale(scale)` and `minWidth: 100%, minHeight: 100%, objectFit: cover` at scale 1, but switching to `objectFit: contain` isn't quite right either.
-
-Better approach: Use the image at `width: 100%; height: 100%; object-fit: cover` but wrap it in an inner div that receives the transform. This way:
-- At scale 1, the image covers the slot naturally
-- At scale < 1, the inner div shrinks, revealing that the image is smaller than the slot (but the slot background shows through)
-- At scale > 1, the image overflows (clipped by the slot's overflow-hidden)
-
-Actually, the simplest correct fix:
-- Keep `object-fit: cover` but set the image size larger than the slot (e.g., `width: 100%` and `height: auto` or vice versa depending on aspect ratio)
-- OR: Remove `object-cover`, set `object-fit: none` (renders at natural size), center the image, and let transform handle everything
-
-The cleanest approach: Set the image to `position: absolute; width: 100%; height: 100%; object-fit: cover;` and apply the transform to a wrapper div around it. When scale < 1, the wrapper shrinks below the slot size, revealing more of the image edges. The slot's `overflow: hidden` clips to the boundary.
-
-**Double-tap reset**:
-- Add ref: `const lastTapTime = useRef(0)`
-- In `handlePointerDown`, before starting drag:
-  ```
-  const now = Date.now();
-  if (now - lastTapTime.current < 300) {
-    handleImageUpdate(slotId, { offsetX: 0, offsetY: 0, scale: 1 });
-    lastTapTime.current = 0;
-    return; // don't start drag
-  }
-  lastTapTime.current = now;
-  ```
-
 ### Files to modify
-- **`src/pages/CanvasEditor.tsx`** -- fix image transform approach and add double-tap reset logic
 
+**`src/pages/CanvasEditor.tsx`**
+- Add `imageDimensions` state: `Record<string, { w: number; h: number }>`
+- Add `onLoad` handler to each `<img>` to populate dimensions
+- Replace image slot rendering (lines 288-301): remove wrapper div, render img directly with computed cover size and combined transform
+- The slot container div keeps `overflow-hidden` and `position: absolute`
+
+**`src/components/PostThumbnail.tsx`**
+- Apply same rendering approach to thumbnail images (simpler version without interactivity)
+
+### No data model changes
+`CanvasImageData` fields (`offsetX`, `offsetY`, `scale`) remain the same. The only change is how the browser renders them.
