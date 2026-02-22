@@ -287,7 +287,7 @@ const CanvasEditor = () => {
               >
                 {imgData ? (
                   <div
-                    className="absolute inset-0 pointer-events-none"
+                    className="absolute w-full h-full pointer-events-none"
                     style={{
                       transform: `translate(${imgData.offsetX}px, ${imgData.offsetY}px) scale(${imgData.scale})`,
                       transformOrigin: "center center",
