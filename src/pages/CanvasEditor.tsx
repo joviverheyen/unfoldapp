@@ -36,6 +36,7 @@ const CanvasEditor = () => {
   const dragStart = useRef({ x: 0, y: 0 });
   const dragSlotId = useRef<string | null>(null);
   const dragStartOffset = useRef({ x: 0, y: 0 });
+  const lastTapTime = useRef(0);
 
   useEffect(() => {
     if (!user || !postId) return;
@@ -182,6 +183,17 @@ const CanvasEditor = () => {
   const handlePointerDown = (e: React.PointerEvent, slotId: string) => {
     const imgData = canvasData.images.find((img) => img.slotId === slotId);
     if (!imgData) return;
+
+    // Double-tap detection: reset zoom and pan
+    const now = Date.now();
+    if (now - lastTapTime.current < 300) {
+      handleImageUpdate(slotId, { offsetX: 0, offsetY: 0, scale: 1 });
+      lastTapTime.current = 0;
+      e.preventDefault();
+      return;
+    }
+    lastTapTime.current = now;
+
     isDragging.current = true;
     dragSlotId.current = slotId;
     dragStart.current = { x: e.clientX, y: e.clientY };
@@ -274,14 +286,19 @@ const CanvasEditor = () => {
                 onPointerUp={imgData && isActive ? handlePointerUp : undefined}
               >
                 {imgData ? (
-                  <img
-                    src={imgData.imageUrl}
-                    alt=""
-                    className="w-full h-full object-cover pointer-events-none"
+                  <div
+                    className="absolute inset-0 pointer-events-none"
                     style={{
                       transform: `translate(${imgData.offsetX}px, ${imgData.offsetY}px) scale(${imgData.scale})`,
+                      transformOrigin: "center center",
                     }}
-                  />
+                  >
+                    <img
+                      src={imgData.imageUrl}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
                 ) : (
                   <div className="w-full h-full bg-secondary flex items-center justify-center">
                     <ImageIcon className="h-8 w-8 text-muted-foreground/40" />
