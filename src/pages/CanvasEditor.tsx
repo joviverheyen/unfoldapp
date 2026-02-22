@@ -30,6 +30,8 @@ const CanvasEditor = () => {
   const [activeElement, setActiveElement] = useState<ActiveElement>(null);
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [imageDimensions, setImageDimensions] = useState<Record<string, { w: number; h: number }>>({});
+  const slotRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // Drag-to-pan refs
   const isDragging = useRef(false);
@@ -272,6 +274,7 @@ const CanvasEditor = () => {
             return (
               <div
                 key={slot.id}
+                ref={(el) => { slotRefs.current[slot.id] = el; }}
                 className={`absolute cursor-pointer overflow-hidden transition-all ${isActive ? "ring-2 ring-primary" : ""}`}
                 style={{
                   left: `${slot.x}%`,
@@ -285,21 +288,59 @@ const CanvasEditor = () => {
                 onPointerMove={imgData && isActive ? handlePointerMove : undefined}
                 onPointerUp={imgData && isActive ? handlePointerUp : undefined}
               >
-                {imgData ? (
-                  <div
-                    className="absolute w-full h-full pointer-events-none"
-                    style={{
-                      transform: `translate(${imgData.offsetX}px, ${imgData.offsetY}px) scale(${imgData.scale})`,
-                      transformOrigin: "center center",
-                    }}
-                  >
+                {imgData ? (() => {
+                  const dims = imageDimensions[slot.id];
+                  const slotEl = slotRefs.current[slot.id];
+                  let imgStyle: React.CSSProperties;
+
+                  if (dims && slotEl) {
+                    const slotW = slotEl.offsetWidth;
+                    const slotH = slotEl.offsetHeight;
+                    const imgRatio = dims.w / dims.h;
+                    const slotRatio = slotW / slotH;
+                    let coverW: number, coverH: number;
+                    if (imgRatio > slotRatio) {
+                      coverH = slotH;
+                      coverW = coverH * imgRatio;
+                    } else {
+                      coverW = slotW;
+                      coverH = coverW / imgRatio;
+                    }
+                    imgStyle = {
+                      position: 'absolute',
+                      left: '50%',
+                      top: '50%',
+                      width: coverW,
+                      height: coverH,
+                      transform: `translate(-50%, -50%) translate(${imgData.offsetX}px, ${imgData.offsetY}px) scale(${imgData.scale})`,
+                      transformOrigin: 'center center',
+                      pointerEvents: 'none',
+                    };
+                  } else {
+                    // Fallback while loading
+                    imgStyle = {
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover' as const,
+                      pointerEvents: 'none',
+                    };
+                  }
+
+                  return (
                     <img
                       src={imgData.imageUrl}
                       alt=""
-                      className="w-full h-full object-cover"
+                      style={imgStyle}
+                      onLoad={(e) => {
+                        const img = e.currentTarget;
+                        setImageDimensions((prev) => ({
+                          ...prev,
+                          [slot.id]: { w: img.naturalWidth, h: img.naturalHeight },
+                        }));
+                      }}
                     />
-                  </div>
-                ) : (
+                  );
+                })() : (
                   <div className="w-full h-full bg-secondary flex items-center justify-center">
                     <ImageIcon className="h-8 w-8 text-muted-foreground/40" />
                   </div>
