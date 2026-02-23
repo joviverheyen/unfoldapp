@@ -41,6 +41,8 @@ const PostsScreen = () => {
   const [step, setStep] = useState<"ratio" | "template">("ratio");
   const [loading, setLoading] = useState(true);
   const [batchExporting, setBatchExporting] = useState(false);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -118,6 +120,19 @@ const PostsScreen = () => {
       setPosts((prev) => prev.filter((p) => p.id !== postId));
     }
   };
+  const reorderPosts = async (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return;
+    const reordered = [...posts];
+    const [moved] = reordered.splice(fromIndex, 1);
+    reordered.splice(toIndex, 0, moved);
+    setPosts(reordered);
+    await Promise.all(
+      reordered.map((post, i) =>
+        supabase.from("posts").update({ sort_order: i }).eq("id", post.id)
+      )
+    );
+  };
+
 
   const handleBatchExport = async () => {
     setBatchExporting(true);
@@ -221,14 +236,19 @@ const PostsScreen = () => {
           </div>
         ) : (
           <div className="grid grid-cols-3 gap-3 items-start">
-            {posts.map((post) => {
+            {posts.map((post, index) => {
               const tmpl = post.templates?.definition || null;
               const cd = post.canvas_data as CanvasData;
               const ratioValue = ASPECT_RATIO_CONFIG[post.aspect_ratio as AspectRatio]?.ratio ?? 1;
               return (
                 <div
                   key={post.id}
-                  className="relative cursor-pointer rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow bg-card border border-border group"
+                  draggable
+                  onDragStart={() => setDragIndex(index)}
+                  onDragOver={(e) => { e.preventDefault(); setDragOverIndex(index); }}
+                  onDragEnd={() => { setDragIndex(null); setDragOverIndex(null); }}
+                  onDrop={() => { if (dragIndex !== null) reorderPosts(dragIndex, index); setDragIndex(null); setDragOverIndex(null); }}
+                  className={`relative cursor-pointer rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all bg-card border-2 group ${dragOverIndex === index && dragIndex !== null && dragIndex !== index ? "border-primary" : "border-border"} ${dragIndex === index ? "opacity-40" : "opacity-100"}`}
                   style={{ aspectRatio: ratioValue }}
                   onClick={() => navigate(`/project/${projectId}/post/${post.id}`)}
                 >
