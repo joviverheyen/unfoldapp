@@ -1,94 +1,67 @@
 
 
-# Rewrite Image Display, Zoom, and Pan
+# Fix Image Aspect Ratio Distortion
 
-## The core problem
+## Problem
+Images are being distorted because `slotEl.offsetWidth` / `offsetHeight` are read directly during render. These values can be 0 or stale before layout completes, causing the cover-size computation to produce incorrect dimensions. The image then stretches to fill the slot without respecting its natural aspect ratio.
 
-The current approach wraps the image in a div that is `w-full h-full` (100% of the slot), with the `<img>` using `object-cover`. When the wrapper scales down, the image **still** uses `object-cover` relative to the wrapper, so the browser just crops the same portion smaller -- it never reveals more of the original picture.
-
-`object-cover` is the enemy here. It tells the browser to crop the image to fill its container, which is exactly what we do NOT want when zooming out.
-
-## The fix: render the image at its natural "cover" size, no `object-fit`
-
-Instead of relying on CSS `object-cover`, we will:
-
-1. **Track each image's natural dimensions** via an `onLoad` handler, storing `{ naturalWidth, naturalHeight }` per slot in a ref/state map.
-2. **Compute the "cover" size manually**: given the slot's pixel dimensions and the image's aspect ratio, calculate the width and height needed so the image just covers the slot (same math as `object-cover`, but we control it).
-3. **Render the `<img>` at that computed size** with NO `object-fit`, positioned absolutely and centered in the slot.
-4. **Apply the user's `scale` and `offset` as a CSS transform** on the image itself.
-
-This means:
-- At **scale = 1**, the image covers the slot exactly (same as before).
-- At **scale < 1**, the image physically shrinks below the slot size, revealing its edges -- the full picture becomes visible.
-- At **scale > 1**, the image grows beyond the slot and is clipped by `overflow: hidden`.
-- **Panning** shifts the image within the clipped area.
+## Solution
+Replace the direct DOM measurement (`slotEl.offsetWidth`) with a `ResizeObserver`-based approach that stores slot pixel dimensions in state. This ensures:
+- Dimensions are always accurate and up-to-date
+- A re-render is triggered whenever slot size changes (e.g., window resize)
+- The cover-size math always receives valid inputs
 
 ## Changes
 
-### 1. CanvasEditor.tsx -- image rendering rewrite
+### 1. CanvasEditor.tsx
 
-**Add natural dimensions tracking:**
-- Add a state: `imageDimensions: Record<string, { w: number; h: number }>`
-- On each `<img>` element, add an `onLoad` handler that reads `e.target.naturalWidth` / `naturalHeight` and stores them keyed by `slotId`
+- Add a `slotSizes` state: `Record<string, { w: number; h: number }>`
+- Add a `useEffect` with a `ResizeObserver` that watches all slot ref elements and updates `slotSizes` when they change
+- In the image rendering logic, read from `slotSizes[slot.id]` instead of `slotEl.offsetWidth` / `slotEl.offsetHeight`
+- Add a guard: if slot size is 0 or unknown, use the `objectFit: 'cover'` fallback (which correctly preserves aspect ratio)
 
-**Replace the image wrapper + img markup:**
-- Remove the wrapper `<div>` with transform
-- Render the `<img>` directly, absolutely positioned
-- Use the slot's rendered pixel size (from a ref on the slot div) and the natural dimensions to compute cover-fit width/height
-- Apply `transform: translate(offsetX, offsetY) scale(userScale)` and `transformOrigin: center` directly on the `<img>`
-- Set `left: 50%; top: 50%; transform: translate(-50%, -50%) translate(offsetX, offsetY) scale(scale)` to center it
+### 2. PostThumbnail.tsx
 
-**Concrete style for the `<img>`:**
-```
-position: absolute
-left: 50%
-top: 50%
-transform: translate(-50%, -50%) translate(offsetXpx, offsetYpx) scale(s)
-transformOrigin: center center
-width: computed cover width
-height: computed cover height
-pointer-events: none
-(no object-fit at all)
-```
-
-The cover size computation:
-```
-imgRatio = naturalWidth / naturalHeight
-slotRatio = slotPixelWidth / slotPixelHeight
-if imgRatio > slotRatio:
-  coverHeight = slotPixelHeight
-  coverWidth = coverHeight * imgRatio
-else:
-  coverWidth = slotPixelWidth
-  coverHeight = coverWidth / imgRatio
-```
-
-Before natural dimensions are known (image still loading), fall back to `width: 100%; height: 100%; object-fit: cover` as a placeholder.
-
-### 2. PostThumbnail.tsx -- match the same approach
-
-Update the thumbnail renderer to use the same rendering logic so thumbnails accurately reflect the editor view. Since thumbnails are small and non-interactive, a simpler version is fine: just remove `object-cover` and apply the same computed sizing.
-
-### 3. exportCanvas.ts -- no changes needed
-
-The export function already does manual cover-size computation (lines 54-63) and draws with `drawImage`, so it already handles this correctly and will stay in sync.
-
-### 4. Double-tap reset -- already implemented
-
-The double-tap detection in `handlePointerDown` is already in place and resets `offsetX`, `offsetY`, and `scale` to their defaults.
+- Apply the same `ResizeObserver` approach to keep thumbnail rendering consistent with the editor
 
 ## Technical details
 
 ### Files to modify
+- **`src/pages/CanvasEditor.tsx`** -- add `slotSizes` state, `ResizeObserver` effect, replace `slotEl.offsetWidth/Height` reads with state lookups
+- **`src/components/PostThumbnail.tsx`** -- same pattern for thumbnail image rendering
 
-**`src/pages/CanvasEditor.tsx`**
-- Add `imageDimensions` state: `Record<string, { w: number; h: number }>`
-- Add `onLoad` handler to each `<img>` to populate dimensions
-- Replace image slot rendering (lines 288-301): remove wrapper div, render img directly with computed cover size and combined transform
-- The slot container div keeps `overflow-hidden` and `position: absolute`
+### Key code pattern
+```typescript
+const [slotSizes, setSlotSizes] = useState<Record<string, { w: number; h: number }>>({});
 
-**`src/components/PostThumbnail.tsx`**
-- Apply same rendering approach to thumbnail images (simpler version without interactivity)
+useEffect(() => {
+  const observer = new ResizeObserver((entries) => {
+    const updates: Record<string, { w: number; h: number }> = {};
+    for (const entry of entries) {
+      const id = (entry.target as HTMLElement).dataset.slotId;
+      if (id) {
+        updates[id] = { w: entry.contentRect.width, h: entry.contentRect.height };
+      }
+    }
+    if (Object.keys(updates).length > 0) {
+      setSlotSizes((prev) => ({ ...prev, ...updates }));
+    }
+  });
+  Object.values(slotRefs.current).forEach((el) => {
+    if (el) observer.observe(el);
+  });
+  return () => observer.disconnect();
+}, [template]);
+```
 
-### No data model changes
-`CanvasImageData` fields (`offsetX`, `offsetY`, `scale`) remain the same. The only change is how the browser renders them.
+Then in the image rendering:
+```typescript
+const slotSize = slotSizes[slot.id];
+if (dims && slotSize && slotSize.w > 0 && slotSize.h > 0) {
+  // use slotSize.w and slotSize.h for cover computation
+} else {
+  // fallback: objectFit: 'cover'
+}
+```
+
+This guarantees dimensions are measured after layout and updated on resize, so the cover computation always produces correct aspect-ratio-preserving sizes.
