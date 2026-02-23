@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { CanvasData, TemplateDefinition, AspectRatio, ASPECT_RATIO_CONFIG } from "@/types/template";
 import { ImageIcon } from "lucide-react";
 
@@ -12,7 +12,27 @@ interface PostThumbnailProps {
 const PostThumbnail = ({ canvasData, template, aspectRatio, className = "" }: PostThumbnailProps) => {
   const ratioValue = ASPECT_RATIO_CONFIG[aspectRatio]?.ratio ?? 1;
   const [dims, setDims] = useState<Record<string, { w: number; h: number }>>({});
+  const [slotSizes, setSlotSizes] = useState<Record<string, { w: number; h: number }>>({});
   const slotRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  useEffect(() => {
+    const observer = new ResizeObserver((entries) => {
+      const updates: Record<string, { w: number; h: number }> = {};
+      for (const entry of entries) {
+        const id = (entry.target as HTMLElement).dataset.slotId;
+        if (id) {
+          updates[id] = { w: entry.contentRect.width, h: entry.contentRect.height };
+        }
+      }
+      if (Object.keys(updates).length > 0) {
+        setSlotSizes((prev) => ({ ...prev, ...updates }));
+      }
+    });
+    Object.values(slotRefs.current).forEach((el) => {
+      if (el) observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, [template]);
 
   return (
     <div
@@ -26,6 +46,7 @@ const PostThumbnail = ({ canvasData, template, aspectRatio, className = "" }: Po
           <div
             key={slot.id}
             ref={(el) => { slotRefs.current[slot.id] = el; }}
+            data-slot-id={slot.id}
             className="absolute overflow-hidden"
             style={{
               left: `${slot.x}%`,
@@ -36,20 +57,18 @@ const PostThumbnail = ({ canvasData, template, aspectRatio, className = "" }: Po
           >
             {imgData ? (() => {
               const d = dims[slot.id];
-              const slotEl = slotRefs.current[slot.id];
+              const slotSize = slotSizes[slot.id];
               let imgStyle: React.CSSProperties;
 
-              if (d && slotEl) {
-                const slotW = slotEl.offsetWidth;
-                const slotH = slotEl.offsetHeight;
+              if (d && slotSize && slotSize.w > 0 && slotSize.h > 0) {
                 const imgRatio = d.w / d.h;
-                const slotRatio = slotW / slotH;
+                const slotRatio = slotSize.w / slotSize.h;
                 let coverW: number, coverH: number;
                 if (imgRatio > slotRatio) {
-                  coverH = slotH;
+                  coverH = slotSize.h;
                   coverW = coverH * imgRatio;
                 } else {
-                  coverW = slotW;
+                  coverW = slotSize.w;
                   coverH = coverW / imgRatio;
                 }
                 imgStyle = {
