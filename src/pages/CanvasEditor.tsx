@@ -31,6 +31,7 @@ const CanvasEditor = () => {
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [imageDimensions, setImageDimensions] = useState<Record<string, { w: number; h: number }>>({});
+  const [slotSizes, setSlotSizes] = useState<Record<string, { w: number; h: number }>>({});
   const slotRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // Drag-to-pan refs
@@ -92,6 +93,26 @@ const CanvasEditor = () => {
     const timeout = setTimeout(() => { saveCanvas(); }, 1500);
     return () => clearTimeout(timeout);
   }, [canvasData, saveCanvas]);
+
+  // ResizeObserver to track slot pixel dimensions accurately
+  useEffect(() => {
+    const observer = new ResizeObserver((entries) => {
+      const updates: Record<string, { w: number; h: number }> = {};
+      for (const entry of entries) {
+        const id = (entry.target as HTMLElement).dataset.slotId;
+        if (id) {
+          updates[id] = { w: entry.contentRect.width, h: entry.contentRect.height };
+        }
+      }
+      if (Object.keys(updates).length > 0) {
+        setSlotSizes((prev) => ({ ...prev, ...updates }));
+      }
+    });
+    Object.values(slotRefs.current).forEach((el) => {
+      if (el) observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, [template]);
 
   const handleSlotClick = (slotId: string) => {
     const hasImage = canvasData.images.some((img) => img.slotId === slotId);
@@ -275,6 +296,7 @@ const CanvasEditor = () => {
               <div
                 key={slot.id}
                 ref={(el) => { slotRefs.current[slot.id] = el; }}
+                data-slot-id={slot.id}
                 className={`absolute cursor-pointer overflow-hidden transition-all ${isActive ? "ring-2 ring-primary" : ""}`}
                 style={{
                   left: `${slot.x}%`,
@@ -290,20 +312,18 @@ const CanvasEditor = () => {
               >
                 {imgData ? (() => {
                   const dims = imageDimensions[slot.id];
-                  const slotEl = slotRefs.current[slot.id];
+                  const slotSize = slotSizes[slot.id];
                   let imgStyle: React.CSSProperties;
 
-                  if (dims && slotEl) {
-                    const slotW = slotEl.offsetWidth;
-                    const slotH = slotEl.offsetHeight;
+                  if (dims && slotSize && slotSize.w > 0 && slotSize.h > 0) {
                     const imgRatio = dims.w / dims.h;
-                    const slotRatio = slotW / slotH;
+                    const slotRatio = slotSize.w / slotSize.h;
                     let coverW: number, coverH: number;
                     if (imgRatio > slotRatio) {
-                      coverH = slotH;
+                      coverH = slotSize.h;
                       coverW = coverH * imgRatio;
                     } else {
-                      coverW = slotW;
+                      coverW = slotSize.w;
                       coverH = coverW / imgRatio;
                     }
                     imgStyle = {
@@ -317,7 +337,6 @@ const CanvasEditor = () => {
                       pointerEvents: 'none',
                     };
                   } else {
-                    // Fallback while loading
                     imgStyle = {
                       width: '100%',
                       height: '100%',
