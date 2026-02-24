@@ -16,6 +16,14 @@ const PostThumbnail = memo(({ canvasData, template, aspectRatio, className = "" 
   const [slotSizes, setSlotSizes] = useState<Record<string, { w: number; h: number }>>({});
   const slotRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
+  // Calculate scale factor for thumbnail positioning
+  const getThumbnailScale = () => {
+    // Canvas editor uses ~360px width, thumbnails use 600px
+    const editorWidth = 360;
+    const thumbnailWidth = 600;
+    return thumbnailWidth / editorWidth;
+  };
+
   useEffect(() => {
     const observer = new ResizeObserver((entries) => {
       const updates: Record<string, { w: number; h: number }> = {};
@@ -64,6 +72,7 @@ const PostThumbnail = memo(({ canvasData, template, aspectRatio, className = "" 
               if (d && slotSize && slotSize.w > 0 && slotSize.h > 0) {
                 const imgRatio = d.w / d.h;
                 const slotRatio = slotSize.w / slotSize.h;
+                const thumbnailScale = getThumbnailScale();
                 let coverW: number, coverH: number;
                 if (imgRatio > slotRatio) {
                   coverH = slotSize.h;
@@ -78,7 +87,7 @@ const PostThumbnail = memo(({ canvasData, template, aspectRatio, className = "" 
                   top: '50%',
                   width: coverW,
                   height: coverH,
-                  transform: `translate(-50%, -50%) translate(${imgData.offsetX}px, ${imgData.offsetY}px) scale(${imgData.scale})`,
+                  transform: `translate(-50%, -50%) translate(${imgData.offsetX * thumbnailScale}px, ${imgData.offsetY * thumbnailScale}px) scale(${imgData.scale})`,
                   transformOrigin: 'center center',
                 };
               } else {
@@ -91,7 +100,7 @@ const PostThumbnail = memo(({ canvasData, template, aspectRatio, className = "" 
 
               return (
                 <img
-                  src={getThumbnailUrl(imgData.imageUrl, 300)}
+                  src={getThumbnailUrl(imgData.imageUrl, 600)}
                   alt=""
                   loading="lazy"
                   style={imgStyle}

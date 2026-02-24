@@ -7,8 +7,8 @@
  */
 export function getThumbnailUrl(
   imageUrl: string,
-  width = 300,
-  quality = 75
+  width = 600,
+  quality = 85
 ): string {
   if (!imageUrl.includes("/storage/v1/object/public/")) {
     return imageUrl;
@@ -17,6 +17,6 @@ export function getThumbnailUrl(
     imageUrl.replace(
       "/storage/v1/object/public/",
       "/storage/v1/render/image/public/"
-    ) + `?width=${width}&quality=${quality}`
+    ) + `?width=${width}&quality=${quality}&resize=cover`
   );
 }
