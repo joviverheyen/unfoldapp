@@ -35,33 +35,27 @@ const Projects = () => {
   useEffect(() => {
     if (!user) return;
     const fetchProjects = async () => {
-      const { data, error } = await supabase
-        .from("projects")
-        .select("*")
-        .order("updated_at", { ascending: false });
-      if (error) {
-        toast({ title: "Error", description: error.message, variant: "destructive" });
+      const [projectsRes, postsRes] = await Promise.all([
+        supabase.from("projects").select("*").order("updated_at", { ascending: false }),
+        supabase.from("posts").select("id, aspect_ratio, canvas_data, project_id, templates(definition)").order("sort_order").limit(100),
+      ]);
+
+      if (projectsRes.error) {
+        toast({ title: "Error", description: projectsRes.error.message, variant: "destructive" });
       } else {
-        setProjects(data ?? []);
-        // Fetch first 3 posts per project for thumbnails
-        if (data && data.length > 0) {
-          const { data: posts } = await supabase
-            .from("posts")
-            .select("id, aspect_ratio, canvas_data, project_id, templates(definition)")
-            .in("project_id", data.map((p) => p.id))
-            .order("sort_order")
-            .limit(100);
-          if (posts) {
-            const grouped: Record<string, ProjectPost[]> = {};
-            for (const post of posts as any[]) {
-              const pid = post.project_id;
-              if (!grouped[pid]) grouped[pid] = [];
-              if (grouped[pid].length < 3) grouped[pid].push(post);
-            }
-            setProjectPosts(grouped);
-          }
-        }
+        setProjects(projectsRes.data ?? []);
       }
+
+      if (postsRes.data) {
+        const grouped: Record<string, ProjectPost[]> = {};
+        for (const post of postsRes.data as any[]) {
+          const pid = post.project_id;
+          if (!grouped[pid]) grouped[pid] = [];
+          if (grouped[pid].length < 3) grouped[pid].push(post);
+        }
+        setProjectPosts(grouped);
+      }
+
       setLoading(false);
     };
     fetchProjects();

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, memo } from "react";
 import { CanvasData, TemplateDefinition, AspectRatio, ASPECT_RATIO_CONFIG } from "@/types/template";
 import { ImageIcon } from "lucide-react";
 
@@ -9,7 +9,7 @@ interface PostThumbnailProps {
   className?: string;
 }
 
-const PostThumbnail = ({ canvasData, template, aspectRatio, className = "" }: PostThumbnailProps) => {
+const PostThumbnail = memo(({ canvasData, template, aspectRatio, className = "" }: PostThumbnailProps) => {
   const ratioValue = ASPECT_RATIO_CONFIG[aspectRatio]?.ratio ?? 1;
   const [dims, setDims] = useState<Record<string, { w: number; h: number }>>({});
   const [slotSizes, setSlotSizes] = useState<Record<string, { w: number; h: number }>>({});
@@ -138,6 +138,13 @@ const PostThumbnail = ({ canvasData, template, aspectRatio, className = "" }: Po
       })}
     </div>
   );
-};
+}, (prev, next) =>
+  prev.canvasData === next.canvasData &&
+  prev.template === next.template &&
+  prev.aspectRatio === next.aspectRatio &&
+  prev.className === next.className
+);
+
+PostThumbnail.displayName = "PostThumbnail";
 
 export default PostThumbnail;
