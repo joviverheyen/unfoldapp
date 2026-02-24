@@ -1,53 +1,54 @@
 
 
-# Add Post Reorder (Drag-and-Drop)
+# Performance Optimization for Unfold
 
-## Overview
-Add the ability to reorder posts in the project view by long-pressing and dragging them to a new position. The new order will be saved to the database.
+## Phase 1: React Component Memoization (Immediate)
 
-## Approach
-Use native HTML drag-and-drop (no new dependencies needed) on the post grid items. When a post is dropped in a new position, update the local state and persist the new `sort_order` values to the database.
+### PostThumbnail -- wrap with React.memo
+Add `React.memo` with a custom comparator that checks `canvasData`, `template`, and `aspectRatio` by shallow reference. This prevents re-renders when the parent re-renders but the thumbnail data hasn't changed (e.g., during drag reorder on PostsScreen).
 
-## Changes
+### CanvasEditor -- memoize handlers with useCallback
+Several inline handlers (e.g., `handleSlotClick`, pointer handlers) are already using `useCallback` for `saveCanvas`, but image `onLoad` and other handlers can be stabilized to reduce unnecessary child re-renders.
 
-### PostsScreen.tsx
+## Phase 2: Code Splitting (High Impact on Load Time)
 
-1. **Add drag state**: Track which post is being dragged and which position it's hovering over using `useState` (`dragIndex` and `dragOverIndex`).
+### Lazy-load route components
+The app currently imports all page components eagerly in `App.tsx`. Wrap each route component with `React.lazy` + `Suspense` so the canvas editor bundle (the heaviest page) is only loaded when needed.
 
-2. **Make post items draggable**: Add `draggable` attribute and handlers to each post card:
-   - `onDragStart` -- set the dragged post index, add a visual style (e.g., reduced opacity)
-   - `onDragOver` -- prevent default, set the drag-over index to show a visual drop indicator
-   - `onDragEnd` -- clear drag state
-   - `onDrop` -- reorder the posts array, update state, persist to database
+**Changes to `src/App.tsx`:**
+- Replace static imports with `const Projects = lazy(() => import('./pages/Projects'))` etc.
+- Wrap `<Routes>` in `<Suspense fallback={...}>`
 
-3. **Visual feedback**: 
-   - The dragged item gets reduced opacity
-   - The drop target gets a highlighted border or subtle indicator showing where the post will land
+## Phase 3: Projects Page -- Parallel Fetch Fix
 
-4. **Persist reorder**: After dropping, compute new `sort_order` values (simply use array index) and batch-update all affected posts in the database:
-   ```typescript
-   const reorderPosts = async (fromIndex: number, toIndex: number) => {
-     const reordered = [...posts];
-     const [moved] = reordered.splice(fromIndex, 1);
-     reordered.splice(toIndex, 0, moved);
-     setPosts(reordered);
-     
-     // Update sort_order for all posts
-     await Promise.all(
-       reordered.map((post, i) =>
-         supabase.from("posts").update({ sort_order: i }).eq("id", post.id)
-       )
-     );
-   };
-   ```
+The Projects page currently fetches projects first, then fetches posts sequentially. It should use `Promise.all` to fetch both in parallel (the posts query uses `.in()` on project IDs, so this needs a slight restructure -- fetch all user posts and group client-side, or keep the sequential approach but at least make the two queries independent).
 
-5. **Touch support**: Add `onTouchStart`, `onTouchMove`, and `onTouchEnd` handlers as a fallback for mobile devices where native drag-and-drop is less reliable. Alternatively, use a simpler approach with up/down arrow buttons visible on each card for mobile reordering.
+**Note:** PostsScreen already uses `Promise.all` for its three queries -- no change needed there.
 
-## Technical details
+**Changes to `src/pages/Projects.tsx`:**
+- Restructure the fetch to use `Promise.all` where possible, or at minimum move the posts fetch to not block project display.
 
-### Files to modify
-- **`src/pages/PostsScreen.tsx`** -- add drag state, drag event handlers on post cards, reorder function with database persistence, and visual drag feedback styling
+## Phase 4: Database Indexes
 
-### No database changes needed
-The `sort_order` column already exists on the `posts` table and is used for ordering.
+Add indexes to speed up the most common queries:
+
+```sql
+CREATE INDEX IF NOT EXISTS idx_posts_project_sort ON posts(project_id, sort_order);
+CREATE INDEX IF NOT EXISTS idx_projects_user_updated ON projects(user_id, updated_at DESC);
+```
+
+## Summary of Files to Modify
+
+| File | Change |
+|------|--------|
+| `src/components/PostThumbnail.tsx` | Wrap export with `React.memo` + custom comparator |
+| `src/App.tsx` | Add `React.lazy` + `Suspense` for route components |
+| `src/pages/Projects.tsx` | Restructure fetch for parallelism |
+| Database migration | Add two indexes |
+
+## What's NOT included (and why)
+
+- **Image optimization / WebP / thumbnails**: Would require a storage transformation pipeline (edge function or Supabase image transforms). This is a separate, larger effort.
+- **React Query migration**: The existing `useEffect`-based fetching works fine for this app's scale. Migrating to React Query would be beneficial but is a larger refactor better done as its own task.
+- **Web Vitals monitoring**: Nice-to-have but doesn't improve performance itself -- can be added separately.
 
