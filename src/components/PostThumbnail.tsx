@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, memo } from "react";
 import { CanvasData, TemplateDefinition, AspectRatio, ASPECT_RATIO_CONFIG } from "@/types/template";
 import { ImageIcon } from "lucide-react";
+import { getThumbnailUrl } from "@/lib/imageUtils";
 
 interface PostThumbnailProps {
   canvasData: CanvasData;
@@ -90,7 +91,7 @@ const PostThumbnail = memo(({ canvasData, template, aspectRatio, className = "" 
 
               return (
                 <img
-                  src={imgData.imageUrl}
+                  src={getThumbnailUrl(imgData.imageUrl, 300)}
                   alt=""
                   loading="lazy"
                   style={imgStyle}
