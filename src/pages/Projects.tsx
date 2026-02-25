@@ -34,9 +34,9 @@ const Projects = () => {
     if (!user) return;
     const fetchProjects = async () => {
       const [projectsRes, postsRes] = await Promise.all([
-        supabase.from("projects").select("*").order("updated_at", { ascending: false }),
-        supabase.from("posts").select("id, aspect_ratio, thumbnail_url, project_id").order("sort_order").limit(100),
-      ]);
+      supabase.from("projects").select("*").order("updated_at", { ascending: false }),
+      supabase.from("posts").select("id, aspect_ratio, thumbnail_url, project_id").order("sort_order").limit(100)]
+      );
 
       if (projectsRes.error) {
         toast({ title: "Error", description: projectsRes.error.message, variant: "destructive" });
@@ -61,11 +61,11 @@ const Projects = () => {
 
   const createProject = async () => {
     if (!user) return;
-    const { data, error } = await supabase
-      .from("projects")
-      .insert({ user_id: user.id, title: "Untitled Project" })
-      .select()
-      .single();
+    const { data, error } = await supabase.
+    from("projects").
+    insert({ user_id: user.id, title: "Untitled Project" }).
+    select().
+    single();
     if (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } else if (data) {
@@ -97,12 +97,12 @@ const Projects = () => {
           <h1 className="text-2xl font-bold tracking-tight">Unfold</h1>
         </header>
         <main className="mx-auto max-w-lg px-4 py-6 space-y-4">
-          {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-20 rounded-2xl" />
-          ))}
+          {[1, 2, 3].map((i) =>
+          <Skeleton key={i} className="h-20 rounded-2xl" />
+          )}
         </main>
-      </div>
-    );
+      </div>);
+
   }
 
   return (
@@ -115,8 +115,8 @@ const Projects = () => {
       </header>
 
       <main className="mx-auto max-w-lg px-4 py-6 space-y-4">
-        {projects.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-center">
+        {projects.length === 0 ?
+        <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="mb-4 rounded-2xl bg-secondary p-5">
               <Layers className="h-10 w-10 text-muted-foreground" />
             </div>
@@ -127,14 +127,14 @@ const Projects = () => {
             <Button onClick={createProject} className="rounded-xl gap-2">
               <Plus className="h-4 w-4" /> New Project
             </Button>
-          </div>
-        ) : (
-          projects.map((project) => (
-            <Card
-              key={project.id}
-              className="cursor-pointer border-0 shadow-md hover:shadow-lg transition-shadow rounded-2xl p-4 group relative"
-              onClick={() => navigate(`/project/${project.id}`)}
-            >
+          </div> :
+
+        projects.map((project) =>
+        <Card
+          key={project.id}
+          className="cursor-pointer border-0 shadow-md hover:shadow-lg transition-shadow rounded-2xl p-4 group relative"
+          onClick={() => navigate(`/project/${project.id}`)}>
+
               <div className="flex items-center justify-between">
                 <div className="flex-1 min-w-0">
                   <h3 className="font-semibold font-sans text-base">{project.title}</h3>
@@ -143,42 +143,42 @@ const Projects = () => {
                   </p>
                 </div>
                 <div className="flex gap-1 items-center">
-                  {(projectPosts[project.id] || []).map((post) => (
-                    <div key={post.id} className="h-10 w-7 rounded-md overflow-hidden bg-secondary">
-                      {post.thumbnail_url ? (
-                        <img src={post.thumbnail_url} alt="" className="w-full h-full object-cover" loading="lazy" />
-                      ) : null}
+                  {(projectPosts[project.id] || []).map((post) =>
+              <div key={post.id} className="h-10 w-7 rounded-md overflow-hidden bg-secondary">
+                      {post.thumbnail_url ?
+                <img src={post.thumbnail_url} alt="" className="w-full h-full object-cover" loading="lazy" /> :
+                null}
                     </div>
-                  ))}
+              )}
                   {(!projectPosts[project.id] || projectPosts[project.id].length === 0) &&
-                    [1, 2, 3].map((i) => (
-                      <div key={i} className="h-10 w-7 rounded-md bg-secondary" />
-                    ))
-                  }
+              [1, 2, 3].map((i) =>
+              <div key={i} className="h-10 w-7 rounded-sm bg-secondary" />
+              )
+              }
                 </div>
               </div>
               <button
-                className="absolute top-2 right-2 h-7 w-7 rounded-full bg-background/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                onClick={(e) => deleteProject(project.id, e)}
-              >
+            className="absolute top-2 right-2 h-7 w-7 rounded-full bg-background/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+            onClick={(e) => deleteProject(project.id, e)}>
+
                 <Trash2 className="h-3.5 w-3.5 text-destructive" />
               </button>
             </Card>
-          ))
-        )}
+        )
+        }
       </main>
 
-      {projects.length > 0 && (
-        <Button
-          onClick={createProject}
-          size="icon"
-          className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-xl"
-        >
+      {projects.length > 0 &&
+      <Button
+        onClick={createProject}
+        size="icon"
+        className="fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-xl">
+
           <Plus className="h-6 w-6" />
         </Button>
-      )}
-    </div>
-  );
+      }
+    </div>);
+
 };
 
 export default Projects;
