@@ -83,11 +83,26 @@ const CanvasEditor = () => {
   }, [user, postId]);
 
   const saveCanvas = useCallback(async () => {
-    if (!postId) return;
+    if (!postId || !user) return;
     setSaving(true);
     await supabase.from("posts").update({ canvas_data: canvasData as any }).eq("id", postId);
     setSaving(false);
-  }, [postId, canvasData]);
+
+    // Generate and upload thumbnail in background (don't block UI)
+    if (template) {
+      (async () => {
+        try {
+          const blob = await exportCanvasToImage(canvasData, template, aspectRatio, 600);
+          const thumbPath = `${user.id}/${postId}/thumbnail.png`;
+          await supabase.storage.from("post-images").upload(thumbPath, blob, { upsert: true, contentType: "image/png" });
+          const { data: urlData } = supabase.storage.from("post-images").getPublicUrl(thumbPath);
+          await supabase.from("posts").update({ thumbnail_url: urlData.publicUrl } as any).eq("id", postId);
+        } catch {
+          // thumbnail generation is best-effort
+        }
+      })();
+    }
+  }, [postId, canvasData, user, template, aspectRatio]);
 
   useEffect(() => {
     const timeout = setTimeout(() => { saveCanvas(); }, 1500);

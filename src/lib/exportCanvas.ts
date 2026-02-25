@@ -19,9 +19,10 @@ export async function exportCanvasToImage(
   canvasData: CanvasData,
   template: TemplateDefinition,
   aspectRatio: AspectRatio,
+  outputWidth?: number,
 ): Promise<Blob> {
   const config = ASPECT_RATIO_CONFIG[aspectRatio];
-  const width = config.exportWidth;
+  const width = outputWidth ?? config.exportWidth;
   const height = Math.round(width / config.ratio);
 
   const canvas = document.createElement("canvas");

@@ -23,6 +23,7 @@ export type Database = {
           project_id: string
           sort_order: number
           template_id: string | null
+          thumbnail_url: string | null
           updated_at: string
           user_id: string
         }
@@ -34,6 +35,7 @@ export type Database = {
           project_id: string
           sort_order?: number
           template_id?: string | null
+          thumbnail_url?: string | null
           updated_at?: string
           user_id: string
         }
@@ -45,6 +47,7 @@ export type Database = {
           project_id?: string
           sort_order?: number
           template_id?: string | null
+          thumbnail_url?: string | null
           updated_at?: string
           user_id?: string
         }
