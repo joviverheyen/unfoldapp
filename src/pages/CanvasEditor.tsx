@@ -96,7 +96,8 @@ const CanvasEditor = () => {
           const thumbPath = `${user.id}/${postId}/thumbnail.png`;
           await supabase.storage.from("post-images").upload(thumbPath, blob, { upsert: true, contentType: "image/png" });
           const { data: urlData } = supabase.storage.from("post-images").getPublicUrl(thumbPath);
-          await supabase.from("posts").update({ thumbnail_url: urlData.publicUrl } as any).eq("id", postId);
+          const thumbnailWithCacheBust = `${urlData.publicUrl}?t=${Date.now()}`;
+          await supabase.from("posts").update({ thumbnail_url: thumbnailWithCacheBust } as any).eq("id", postId);
         } catch {
           // thumbnail generation is best-effort
         }
