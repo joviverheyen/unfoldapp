@@ -9,7 +9,7 @@ import { ArrowLeft, Plus, Image as ImageIcon, Download, Trash2 } from "lucide-re
 import { useToast } from "@/hooks/use-toast";
 import { AspectRatio, ASPECT_RATIO_CONFIG, TemplateDefinition, CanvasData } from "@/types/template";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import PostThumbnail from "@/components/PostThumbnail";
+
 import { exportCanvasToImage, downloadBlob } from "@/lib/exportCanvas";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -19,6 +19,7 @@ interface Post {
   template_id: string | null;
   canvas_data: any;
   sort_order: number;
+  thumbnail_url: string | null;
   templates?: { definition: TemplateDefinition } | null;
 }
 
@@ -52,7 +53,7 @@ const PostsScreen = () => {
     const fetchData = async () => {
       const [projectRes, postsRes, templatesRes] = await Promise.all([
         supabase.from("projects").select("title").eq("id", projectId).single(),
-        supabase.from("posts").select("*, templates(definition)").eq("project_id", projectId).order("sort_order"),
+        supabase.from("posts").select("*, templates(definition)").eq("project_id", projectId!).order("sort_order"),
         supabase.from("templates").select("*"),
       ]);
 
@@ -237,8 +238,6 @@ const PostsScreen = () => {
         ) : (
           <div className="grid grid-cols-3 gap-3 items-start">
             {posts.map((post, index) => {
-              const tmpl = post.templates?.definition || null;
-              const cd = post.canvas_data as CanvasData;
               const ratioValue = ASPECT_RATIO_CONFIG[post.aspect_ratio as AspectRatio]?.ratio ?? 1;
               return (
                 <div
@@ -252,11 +251,13 @@ const PostsScreen = () => {
                   style={{ aspectRatio: ratioValue }}
                   onClick={() => navigate(`/project/${projectId}/post/${post.id}`)}
                 >
-                  <PostThumbnail
-                    canvasData={cd?.images ? cd : { images: [], texts: [], background: "#FFFFFF" }}
-                    template={tmpl}
-                    aspectRatio={post.aspect_ratio as AspectRatio}
-                  />
+                  {post.thumbnail_url ? (
+                    <img src={post.thumbnail_url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                  ) : (
+                    <div className="w-full h-full bg-secondary flex items-center justify-center">
+                      <ImageIcon className="h-6 w-6 text-muted-foreground/40" />
+                    </div>
+                  )}
                   <button
                     className="absolute top-1 right-1 h-7 w-7 rounded-full bg-background/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                     onClick={(e) => deletePost(post.id, e)}

@@ -7,14 +7,12 @@ import { Card } from "@/components/ui/card";
 import { Plus, LogOut, Layers, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
-import PostThumbnail from "@/components/PostThumbnail";
-import { AspectRatio, TemplateDefinition, CanvasData } from "@/types/template";
+
 
 interface ProjectPost {
   id: string;
   aspect_ratio: string;
-  canvas_data: any;
-  templates: { definition: any } | null;
+  thumbnail_url: string | null;
 }
 
 interface Project {
@@ -37,7 +35,7 @@ const Projects = () => {
     const fetchProjects = async () => {
       const [projectsRes, postsRes] = await Promise.all([
         supabase.from("projects").select("*").order("updated_at", { ascending: false }),
-        supabase.from("posts").select("id, aspect_ratio, canvas_data, project_id, templates(definition)").order("sort_order").limit(100),
+        supabase.from("posts").select("id, aspect_ratio, thumbnail_url, project_id").order("sort_order").limit(100),
       ]);
 
       if (projectsRes.error) {
@@ -145,19 +143,13 @@ const Projects = () => {
                   </p>
                 </div>
                 <div className="flex gap-1 items-center">
-                  {(projectPosts[project.id] || []).map((post) => {
-                    const cd = post.canvas_data as CanvasData;
-                    const tmpl = post.templates?.definition as TemplateDefinition | null;
-                    return (
-                      <div key={post.id} className="h-10 w-7 rounded-md overflow-hidden">
-                        <PostThumbnail
-                          canvasData={cd?.images ? cd : { images: [], texts: [], background: "#FFFFFF" }}
-                          template={tmpl}
-                          aspectRatio={post.aspect_ratio as AspectRatio}
-                        />
-                      </div>
-                    );
-                  })}
+                  {(projectPosts[project.id] || []).map((post) => (
+                    <div key={post.id} className="h-10 w-7 rounded-md overflow-hidden bg-secondary">
+                      {post.thumbnail_url ? (
+                        <img src={post.thumbnail_url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                      ) : null}
+                    </div>
+                  ))}
                   {(!projectPosts[project.id] || projectPosts[project.id].length === 0) &&
                     [1, 2, 3].map((i) => (
                       <div key={i} className="h-10 w-7 rounded-md bg-secondary" />
