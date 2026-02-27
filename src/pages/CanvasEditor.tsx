@@ -13,6 +13,7 @@ import {
   CanvasImageData,
 } from "@/types/template";
 import { exportCanvasToImage, downloadBlob } from "@/lib/exportCanvas";
+import { resizeImage } from "@/lib/resizeImage";
 import EditorToolbar from "@/components/EditorToolbar";
 
 type ActiveElement = { type: "text"; id: string } | { type: "image"; id: string } | null;
@@ -152,8 +153,9 @@ const CanvasEditor = () => {
     const slotId = pendingSlotRef.current;
     if (!file || !slotId || !user) return;
 
+    const resizedBlob = await resizeImage(file, 2000);
     const path = `${user.id}/${postId}/${slotId}-${Date.now()}`;
-    const { error } = await supabase.storage.from("post-images").upload(path, file);
+    const { error } = await supabase.storage.from("post-images").upload(path, resizedBlob);
     if (error) {
       toast({ title: "Upload failed", description: error.message, variant: "destructive" });
       return;
