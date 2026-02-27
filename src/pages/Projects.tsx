@@ -136,42 +136,42 @@ const Projects = () => {
             <Card
               key={project.id}
               className="cursor-pointer border-0 shadow-md hover:shadow-lg transition-shadow rounded-2xl p-4 group relative"
-              onClick={() => navigate(`/project/${project.id}`)}
-            >
+              onClick={() => navigate(`/project/${project.id}`)}>
+
               <div className="space-y-4">
                 <div className="flex items-start justify-between gap-3">
-                  <h3 className="font-semibold text-base text-foreground truncate">{project.title}</h3>
+                  <h3 className="font-semibold text-base text-foreground truncate font-sans">{project.title}</h3>
                   <p className="text-xs text-muted-foreground shrink-0">
                     {new Date(project.updated_at).toLocaleDateString()}
                   </p>
                 </div>
 
-                {previewPosts.length > 0 && (
-                  <div className="overflow-x-auto">
+                {previewPosts.length > 0 &&
+                <div className="overflow-x-auto">
                     <div className="flex gap-1 w-max pr-2">
-                      {previewPosts.map((post) => (
-                        <div
-                          key={post.id}
-                          className="w-14 h-20 rounded border border-[#f1edea] bg-[#f1edea] overflow-hidden shrink-0"
-                        >
-                          {post.thumbnail_url ? (
-                            <img src={post.thumbnail_url} alt="" className="w-full h-full object-cover" loading="lazy" />
-                          ) : null}
+                      {previewPosts.map((post) =>
+                    <div
+                      key={post.id}
+                      className="w-14 h-20 rounded border border-[#f1edea] bg-[#f1edea] overflow-hidden shrink-0">
+
+                          {post.thumbnail_url ?
+                      <img src={post.thumbnail_url} alt="" className="w-full h-full object-cover" loading="lazy" /> :
+                      null}
                         </div>
-                      ))}
+                    )}
                     </div>
                   </div>
-                )}
+                }
               </div>
 
               <button
                 className="absolute top-2 right-2 h-7 w-7 rounded-full bg-background/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                onClick={(e) => deleteProject(project.id, e)}
-              >
+                onClick={(e) => deleteProject(project.id, e)}>
+
                 <Trash2 className="h-3.5 w-3.5 text-destructive" />
               </button>
-            </Card>
-          );
+            </Card>);
+
         })
         }
       </main>
