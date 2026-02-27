@@ -1,72 +1,57 @@
 
 
-# Generate Thumbnail Images on Save
+# Resize Large Images Before Upload
 
-## Overview
-Instead of live-rendering post thumbnails with complex calculations in the browser, generate a static 600px-wide PNG thumbnail whenever a post is saved. Store it in the `post-images` bucket and reference it via a `thumbnail_url` column on the `posts` table. The Projects and PostsScreen pages then simply display an `<img>` tag.
+## Problem
+Large photos (5MB+) are uploaded at their original resolution, which can cause aspect ratio rendering issues in the editor and wastes storage bandwidth. A 4000x6000px photo is overkill for templates that render at ~360px wide and export at 1080px.
 
-## How it works
-
-1. When the canvas auto-saves in `CanvasEditor` (the debounced save that already runs every 1.5s), also generate a thumbnail using the existing `exportCanvasToImage` function (at 600px width instead of 1080px) and upload it to storage.
-2. Store the public URL in a new `thumbnail_url` column on the `posts` table.
-3. Replace the `PostThumbnail` component usage in `Projects.tsx` and `PostsScreen.tsx` with a simple `<img src={post.thumbnail_url}>` tag.
+## Solution
+Create a client-side `resizeImage` utility that downscales any uploaded image to a maximum width of 2000px (preserving aspect ratio) using an HTML Canvas element before uploading to storage. This runs entirely in the browser -- no backend changes needed.
 
 ## Changes
 
-### 1. Database: Add `thumbnail_url` column to `posts`
+### 1. New utility: `src/lib/resizeImage.ts`
 
-```sql
-ALTER TABLE public.posts ADD COLUMN thumbnail_url text;
+A function that takes a `File`, draws it onto a canvas capped at 2000px width, and returns a resized `Blob`:
+
+```typescript
+export async function resizeImage(file: File, maxWidth = 2000): Promise<Blob> {
+  // Load file into an Image element
+  // If width <= maxWidth, return original file as-is
+  // Otherwise, scale down proportionally and draw to canvas
+  // Return as WebP or PNG blob
+}
 ```
 
-### 2. Update `exportCanvasToImage` to accept a custom width
+Key details:
+- Preserves aspect ratio -- only scales down, never up
+- Images already under 2000px wide pass through unchanged
+- Outputs as `image/webp` (smaller files) with PNG fallback
+- Runs entirely client-side using Canvas API
 
-The function already uses `config.exportWidth` (1080). Add an optional `outputWidth` parameter so we can call it at 600px for thumbnails without changing the export behavior.
+### 2. Update `src/pages/CanvasEditor.tsx` -- resize before upload
 
-### 3. Update `CanvasEditor.tsx` -- generate thumbnail on save
+In `handleFileChange`, call `resizeImage(file)` before uploading to storage:
 
-Modify the `saveCanvas` function to:
-- Call `exportCanvasToImage(canvasData, template, aspectRatio, 600)` to produce a small PNG blob
-- Upload it to `post-images` storage at a path like `{userId}/{postId}/thumbnail.png` (overwriting each time)
-- Save the public URL to the `thumbnail_url` column alongside the `canvas_data` update
+```typescript
+const resizedBlob = await resizeImage(file, 2000);
+const { error } = await supabase.storage.from("post-images").upload(path, resizedBlob);
+```
 
-To avoid generating a thumbnail on every keystroke, the existing 1.5s debounce is sufficient. The thumbnail generation runs in the background and doesn't block the UI.
-
-### 4. Update `PostsScreen.tsx` -- use `thumbnail_url`
-
-- Fetch `thumbnail_url` in the posts query
-- Replace `<PostThumbnail>` with a simple `<img src={post.thumbnail_url}>` (with a fallback placeholder if no thumbnail exists yet)
-- Remove the `PostThumbnail` import
-
-### 5. Update `Projects.tsx` -- use `thumbnail_url`
-
-- Fetch `thumbnail_url` in the posts query  
-- Replace `<PostThumbnail>` with `<img src={post.thumbnail_url}>` (with fallback)
-- Remove the `PostThumbnail` import
-
-### 6. Clean up
-
-- The `PostThumbnail` component can be deleted entirely since it's no longer used anywhere
-- The `imageUtils.ts` file (with `getThumbnailUrl`) can also be deleted since thumbnails are now pre-generated
+This is the only code change needed in the editor. The rest of the flow (URL generation, canvas data, export) stays the same.
 
 ## Technical details
 
+### Files to create
+- **`src/lib/resizeImage.ts`** -- client-side image resize utility
+
 ### Files to modify
-- **`src/lib/exportCanvas.ts`** -- add optional `outputWidth` parameter
-- **`src/pages/CanvasEditor.tsx`** -- generate and upload thumbnail during save
-- **`src/pages/PostsScreen.tsx`** -- replace `PostThumbnail` with `<img>`
-- **`src/pages/Projects.tsx`** -- replace `PostThumbnail` with `<img>`
+- **`src/pages/CanvasEditor.tsx`** -- call `resizeImage()` before `supabase.storage.upload()`
 
-### Files to delete
-- **`src/components/PostThumbnail.tsx`** -- no longer needed
-- **`src/lib/imageUtils.ts`** -- no longer needed
-
-### Database migration
-- Add `thumbnail_url text` column to `posts` table
-
-### Performance benefits
-- Eliminates per-thumbnail ResizeObserver, image dimension tracking, and scale calculations on every render
-- Projects page and PostsScreen load a single small pre-rendered image per post instead of computing layouts
-- Reduces JavaScript execution on list pages significantly
-- Thumbnail generation cost is paid once on save (in the editor, where the user is already waiting) rather than repeatedly on every list render
+### What this achieves
+- A 5MB 4000x6000 JPEG becomes roughly 200-500KB at 2000px wide
+- Fixes aspect ratio rendering issues caused by browsers struggling with very large images
+- 2000px is more than sufficient for 1080px exports
+- No impact on existing uploaded images (only affects new uploads)
+- No backend or database changes required
 
