@@ -51,16 +51,16 @@ export async function exportCanvasToImage(
       ctx.rect(sx, sy, sw, sh);
       ctx.clip();
 
-      // object-cover logic
+      // object-contain logic (preserve full image by default)
       const imgRatio = img.width / img.height;
       const slotRatio = sw / sh;
       let dw: number, dh: number;
       if (imgRatio > slotRatio) {
-        dh = sh * imgData.scale;
-        dw = dh * imgRatio;
-      } else {
         dw = sw * imgData.scale;
         dh = dw / imgRatio;
+      } else {
+        dh = sh * imgData.scale;
+        dw = dh * imgRatio;
       }
       const dx = sx + (sw - dw) / 2 + imgData.offsetX * (width / 360);
       const dy = sy + (sh - dh) / 2 + imgData.offsetY * (height / (360 / config.ratio));

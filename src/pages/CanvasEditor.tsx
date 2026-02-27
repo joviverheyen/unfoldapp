@@ -324,7 +324,7 @@ const CanvasEditor = () => {
                     style={{
                       width: '100%',
                       height: '100%',
-                      objectFit: 'cover',
+                      objectFit: 'contain',
                       transform: `translate(${imgData.offsetX}px, ${imgData.offsetY}px) scale(${imgData.scale})`,
                       pointerEvents: 'none',
                     }}

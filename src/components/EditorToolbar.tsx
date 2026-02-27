@@ -173,7 +173,7 @@ const EditorToolbar = ({
             <ZoomIn className="h-4 w-4 text-muted-foreground" />
             <Slider
               value={[activeImage.scale]}
-              min={0.5}
+              min={0.1}
               max={3}
               step={0.05}
               onValueChange={([v]) => onImageUpdate(activeElement.id, { scale: v })}
