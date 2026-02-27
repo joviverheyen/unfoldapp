@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Download, ImageIcon } from "lucide-react";
+import { ArrowLeft, Download, ImageIcon, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   AspectRatio as AspectRatioType,
@@ -31,6 +31,7 @@ const CanvasEditor = () => {
   const [activeElement, setActiveElement] = useState<ActiveElement>(null);
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [imageDimensions, setImageDimensions] = useState<Record<string, { w: number; h: number }>>({});
   const [slotSizes, setSlotSizes] = useState<Record<string, { w: number; h: number }>>({});
   const slotRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -153,33 +154,38 @@ const CanvasEditor = () => {
     const slotId = pendingSlotRef.current;
     if (!file || !slotId || !user) return;
 
-    const resizedBlob = await resizeImage(file, 2000);
-    const path = `${user.id}/${postId}/${slotId}-${Date.now()}`;
-    const { error } = await supabase.storage.from("post-images").upload(path, resizedBlob);
-    if (error) {
-      toast({ title: "Upload failed", description: error.message, variant: "destructive" });
-      return;
+    setUploading(true);
+    try {
+      const resizedBlob = await resizeImage(file, 2000);
+      const path = `${user.id}/${postId}/${slotId}-${Date.now()}`;
+      const { error } = await supabase.storage.from("post-images").upload(path, resizedBlob);
+      if (error) {
+        toast({ title: "Upload failed", description: error.message, variant: "destructive" });
+        return;
+      }
+
+      const { data: urlData } = supabase.storage.from("post-images").getPublicUrl(path);
+
+      setCanvasData((prev) => {
+        const existing = prev.images.findIndex((img) => img.slotId === slotId);
+        const newImg: CanvasImageData = {
+          slotId,
+          imageUrl: urlData.publicUrl,
+          offsetX: 0,
+          offsetY: 0,
+          scale: 1,
+        };
+        const images = [...prev.images];
+        if (existing >= 0) images[existing] = newImg;
+        else images.push(newImg);
+        return { ...prev, images };
+      });
+
+      pendingSlotRef.current = null;
+      setActiveElement(null);
+    } finally {
+      setUploading(false);
     }
-
-    const { data: urlData } = supabase.storage.from("post-images").getPublicUrl(path);
-
-    setCanvasData((prev) => {
-      const existing = prev.images.findIndex((img) => img.slotId === slotId);
-      const newImg: CanvasImageData = {
-        slotId,
-        imageUrl: urlData.publicUrl,
-        offsetX: 0,
-        offsetY: 0,
-        scale: 1,
-      };
-      const images = [...prev.images];
-      if (existing >= 0) images[existing] = newImg;
-      else images.push(newImg);
-      return { ...prev, images };
-    });
-
-    pendingSlotRef.current = null;
-    setActiveElement(null);
     e.target.value = "";
   };
 
@@ -306,6 +312,14 @@ const CanvasEditor = () => {
           }}
           onClick={(e) => e.stopPropagation()}
         >
+          {uploading && (
+            <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm">
+              <div className="flex flex-col items-center gap-2">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <span className="text-sm font-medium text-muted-foreground">Uploading…</span>
+              </div>
+            </div>
+          )}
           {/* Image slots */}
           {template?.slots.map((slot) => {
             const imgData = canvasData.images.find((img) => img.slotId === slot.id);
