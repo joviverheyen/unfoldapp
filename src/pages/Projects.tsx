@@ -35,7 +35,7 @@ const Projects = () => {
     const fetchProjects = async () => {
       const [projectsRes, postsRes] = await Promise.all([
       supabase.from("projects").select("*").order("updated_at", { ascending: false }),
-      supabase.from("posts").select("id, aspect_ratio, thumbnail_url, project_id").order("sort_order").limit(100)]
+      supabase.from("posts").select("id, aspect_ratio, thumbnail_url, project_id").order("sort_order")]
       );
 
       if (projectsRes.error) {
@@ -49,7 +49,7 @@ const Projects = () => {
         for (const post of postsRes.data as any[]) {
           const pid = post.project_id;
           if (!grouped[pid]) grouped[pid] = [];
-          if (grouped[pid].length < 3) grouped[pid].push(post);
+          grouped[pid].push(post);
         }
         setProjectPosts(grouped);
       }
@@ -129,42 +129,50 @@ const Projects = () => {
             </Button>
           </div> :
 
-        projects.map((project) =>
-        <Card
-          key={project.id}
-          className="cursor-pointer border-0 shadow-md hover:shadow-lg transition-shadow rounded-2xl p-4 group relative"
-          onClick={() => navigate(`/project/${project.id}`)}>
+        projects.map((project) => {
+          const previewPosts = projectPosts[project.id] || [];
 
-              <div className="flex items-center justify-between">
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold font-sans text-base">{project.title}</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">
+          return (
+            <Card
+              key={project.id}
+              className="cursor-pointer border-0 shadow-md hover:shadow-lg transition-shadow rounded-2xl p-4 group relative"
+              onClick={() => navigate(`/project/${project.id}`)}
+            >
+              <div className="space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                  <h3 className="font-semibold text-base text-foreground truncate">{project.title}</h3>
+                  <p className="text-xs text-muted-foreground shrink-0">
                     {new Date(project.updated_at).toLocaleDateString()}
                   </p>
                 </div>
-                <div className="flex gap-1 items-center">
-                  {(projectPosts[project.id] || []).map((post) =>
-              <div key={post.id} className="h-10 w-7 rounded-md overflow-hidden bg-secondary">
-                      {post.thumbnail_url ?
-                <img src={post.thumbnail_url} alt="" className="w-full h-full object-cover" loading="lazy" /> :
-                null}
-                    </div>
-              )}
-                  {(!projectPosts[project.id] || projectPosts[project.id].length === 0) &&
-              [1, 2, 3].map((i) =>
-              <div key={i} className="h-10 w-7 rounded-sm bg-secondary" />
-              )
-              }
-                </div>
-              </div>
-              <button
-            className="absolute top-2 right-2 h-7 w-7 rounded-full bg-background/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-            onClick={(e) => deleteProject(project.id, e)}>
 
+                {previewPosts.length > 0 && (
+                  <div className="overflow-x-auto">
+                    <div className="flex gap-1 w-max pr-2">
+                      {previewPosts.map((post) => (
+                        <div
+                          key={post.id}
+                          className="w-14 h-20 rounded border border-[#f1edea] bg-[#f1edea] overflow-hidden shrink-0"
+                        >
+                          {post.thumbnail_url ? (
+                            <img src={post.thumbnail_url} alt="" className="w-full h-full object-cover" loading="lazy" />
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <button
+                className="absolute top-2 right-2 h-7 w-7 rounded-full bg-background/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={(e) => deleteProject(project.id, e)}
+              >
                 <Trash2 className="h-3.5 w-3.5 text-destructive" />
               </button>
             </Card>
-        )
+          );
+        })
         }
       </main>
 
