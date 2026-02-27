@@ -1,57 +1,57 @@
 
+# Fix Image Aspect Ratio in Editor
 
-# Resize Large Images Before Upload
-
-## Problem
-Large photos (5MB+) are uploaded at their original resolution, which can cause aspect ratio rendering issues in the editor and wastes storage bandwidth. A 4000x6000px photo is overkill for templates that render at ~360px wide and export at 1080px.
+## Root Cause
+The editor manually calculates "cover" dimensions using two separate state objects (`imageDimensions` from `onLoad` and `slotSizes` from ResizeObserver). These can be stale, mis-timed, or affected by rounding, causing wrong aspect ratios. The export works correctly because it uses the browser's native image loading and computes dimensions freshly each time.
 
 ## Solution
-Create a client-side `resizeImage` utility that downscales any uploaded image to a maximum width of 2000px (preserving aspect ratio) using an HTML Canvas element before uploading to storage. This runs entirely in the browser -- no backend changes needed.
+Replace the manual cover calculation with native CSS `object-fit: cover`, and apply pan/zoom as a CSS `transform`. The browser handles the aspect ratio correctly, and `overflow: hidden` on the slot container clips the result.
+
+**Before (broken):**
+```text
+Track naturalWidth/Height in state --> track slot pixels via ResizeObserver --> manually compute cover dimensions --> set explicit pixel width/height on img
+```
+
+**After (reliable):**
+```text
+img { width: 100%; height: 100%; object-fit: cover; transform: translate(offset) scale(zoom) }
+```
 
 ## Changes
 
-### 1. New utility: `src/lib/resizeImage.ts`
+### Modify `src/pages/CanvasEditor.tsx`
 
-A function that takes a `File`, draws it onto a canvas capped at 2000px width, and returns a resized `Blob`:
+1. **Remove `imageDimensions` state and `slotSizes` state and `slotRefs`** -- no longer needed since the browser handles cover natively.
 
-```typescript
-export async function resizeImage(file: File, maxWidth = 2000): Promise<Blob> {
-  // Load file into an Image element
-  // If width <= maxWidth, return original file as-is
-  // Otherwise, scale down proportionally and draw to canvas
-  // Return as WebP or PNG blob
-}
-```
+2. **Remove the ResizeObserver useEffect** -- no longer needed.
 
-Key details:
-- Preserves aspect ratio -- only scales down, never up
-- Images already under 2000px wide pass through unchanged
-- Outputs as `image/webp` (smaller files) with PNG fallback
-- Runs entirely client-side using Canvas API
+3. **Simplify image rendering** in the slot loop. Replace the entire manual cover calculation block with:
+   ```tsx
+   <img
+     src={imgData.imageUrl}
+     alt=""
+     style={{
+       width: '100%',
+       height: '100%',
+       objectFit: 'cover',
+       transform: `translate(${imgData.offsetX}px, ${imgData.offsetY}px) scale(${imgData.scale})`,
+       pointerEvents: 'none',
+     }}
+   />
+   ```
+   The `onLoad` handler for dimension tracking is also removed.
 
-### 2. Update `src/pages/CanvasEditor.tsx` -- resize before upload
+4. **Remove `data-slot-id` and `ref` assignments** on slot divs since they were only for the ResizeObserver.
 
-In `handleFileChange`, call `resizeImage(file)` before uploading to storage:
+### What stays the same
+- Export logic (already works correctly)
+- Drag-to-pan and pointer handling (unchanged, operates on `offsetX/offsetY/scale`)
+- Zoom slider in toolbar (unchanged)
+- Double-tap reset (unchanged)
+- File upload and resize flow (unchanged)
 
-```typescript
-const resizedBlob = await resizeImage(file, 2000);
-const { error } = await supabase.storage.from("post-images").upload(path, resizedBlob);
-```
-
-This is the only code change needed in the editor. The rest of the flow (URL generation, canvas data, export) stays the same.
-
-## Technical details
-
-### Files to create
-- **`src/lib/resizeImage.ts`** -- client-side image resize utility
-
-### Files to modify
-- **`src/pages/CanvasEditor.tsx`** -- call `resizeImage()` before `supabase.storage.upload()`
-
-### What this achieves
-- A 5MB 4000x6000 JPEG becomes roughly 200-500KB at 2000px wide
-- Fixes aspect ratio rendering issues caused by browsers struggling with very large images
-- 2000px is more than sufficient for 1080px exports
-- No impact on existing uploaded images (only affects new uploads)
-- No backend or database changes required
-
+### Why this works
+- `object-fit: cover` makes the browser fill the slot while preserving the image's aspect ratio -- this is the same logic the export does manually with canvas
+- `transform: translate()` shifts the covered image for panning (clipped by `overflow: hidden` on the slot container)
+- `transform: scale()` zooms in/out from the image center
+- No manual dimension tracking means no stale state, no timing issues, no rounding errors
