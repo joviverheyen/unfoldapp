@@ -98,9 +98,25 @@ export async function exportCanvasToImage(
           ? tx + tw
           : tx;
 
-    const lines = content.split("\n");
+    // Word-wrap text to fit within the text area width
+    const rawLines = content.split("\n");
     const isUnderline = textData?.underline ?? false;
-    lines.forEach((line, i) => {
+    const wrappedLines: string[] = [];
+    for (const rawLine of rawLines) {
+      const words = rawLine.split(" ");
+      let currentLine = "";
+      for (const word of words) {
+        const testLine = currentLine ? `${currentLine} ${word}` : word;
+        if (ctx.measureText(testLine).width > tw && currentLine) {
+          wrappedLines.push(currentLine);
+          currentLine = word;
+        } else {
+          currentLine = testLine;
+        }
+      }
+      wrappedLines.push(currentLine);
+    }
+    wrappedLines.forEach((line, i) => {
       const lineY = ty + i * fontSize * 1.3;
       ctx.fillText(line, alignX, lineY);
       if (isUnderline) {
