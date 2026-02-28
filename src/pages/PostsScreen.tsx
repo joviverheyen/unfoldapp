@@ -47,22 +47,34 @@ const PostsScreen = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  const fetchData = async () => {
+    const [projectRes, postsRes, templatesRes] = await Promise.all([
+      supabase.from("projects").select("title").eq("id", projectId).single(),
+      supabase.from("posts").select("*, templates(definition)").eq("project_id", projectId!).order("sort_order"),
+      supabase.from("templates").select("*"),
+    ]);
+
+    if (projectRes.data) setProjectTitle(projectRes.data.title);
+    if (postsRes.data) setPosts(postsRes.data as unknown as Post[]);
+    if (templatesRes.data) setTemplates(templatesRes.data as unknown as Template[]);
+    setLoading(false);
+  };
+
   useEffect(() => {
     if (!user || !projectId) return;
-
-    const fetchData = async () => {
-      const [projectRes, postsRes, templatesRes] = await Promise.all([
-        supabase.from("projects").select("title").eq("id", projectId).single(),
-        supabase.from("posts").select("*, templates(definition)").eq("project_id", projectId!).order("sort_order"),
-        supabase.from("templates").select("*"),
-      ]);
-
-      if (projectRes.data) setProjectTitle(projectRes.data.title);
-      if (postsRes.data) setPosts(postsRes.data as unknown as Post[]);
-      if (templatesRes.data) setTemplates(templatesRes.data as unknown as Template[]);
-      setLoading(false);
-    };
     fetchData();
+  }, [user, projectId]);
+
+  // Re-fetch when navigating back (window/tab regains focus or visibility)
+  useEffect(() => {
+    const onFocus = () => { if (user && projectId) fetchData(); };
+    const onVisible = () => { if (document.visibilityState === "visible" && user && projectId) fetchData(); };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [user, projectId]);
 
   const updateTitle = async () => {
